@@ -39,70 +39,94 @@ async fn bruh(socket: WebSocket, users: Users) {
   let (sender, rcv) = unbounded_channel();
 
   let rcv = UnboundedReceiverStream::new(rcv);
-  let mut username = None;
-  tokio::task::spawn(rcv.forward(ws_sender).map(|result| {
+  let mut username: Option<String> = None;
+
+  let users2 = users.clone();
+  let username2 = username.clone();
+  tokio::task::spawn(rcv.forward(ws_sender).map(move |result| {
     if let Err(e) = result {
-      eprintln!("error sending websocket msg: {e}")
+      eprintln!("error sending websocket msg: {e}");
+      if let Some(username) = username2 {
+        if users2.blocking_read().contains_key(&username) {
+          let mut guarded_users = users2.blocking_write();
+          guarded_users.remove(&username);
+          guarded_users.values().for_each(|user| {
+            user
+              .send(Ok(Message::text(
+                serde_json::to_string(&ServerMessage::user_disconnected(username.clone())).unwrap(),
+              )))
+              .unwrap()
+          })
+        }
+      }
     }
   }));
 
   while let Some(result) = ws_rcv.next().await {
     match result {
       Ok(msg) => {
-        let message = serde_json::from_str::<WSClientMessage>(msg.to_str().unwrap()).unwrap();
+        let message = serde_json::from_str::<ClientMessage>(msg.to_str().unwrap()).unwrap();
         match message._type {
-          WSClientMessageType::InvitationRequest => {
+          ClientMessageType::InvitationRequest => {
             let username_taken = users.read().await.contains_key(&message.user);
 
             sender
               .send(Ok(Message::text(
-                serde_json::to_string(&ServerMessage::InvitationResult {
-                  accepted: !username_taken,
-                  other_users: if username_taken {
+                serde_json::to_string(&ServerMessage::invitation_request(
+                  !username_taken,
+                  if username_taken {
                     None
                   } else {
                     Some(users.read().await.keys().map(|s| s.clone()).collect())
                   },
-                })
+                ))
                 .unwrap(),
               )))
               .unwrap();
 
             if !username_taken {
               username = Some(message.user);
+              let users_guard = users.write().await;
+
+              users_guard.values().for_each(|user| {
+                user
+                  .send(Ok(Message::text(
+                    serde_json::to_string(&ServerMessage::user_connected(
+                      username.clone().unwrap(),
+                    ))
+                    .unwrap(),
+                  )))
+                  .unwrap()
+              });
               users
                 .write()
                 .await
                 .insert(username.clone().unwrap(), sender.clone());
             }
           }
-          WSClientMessageType::SendMessageTo => users
-            .write()
+          ClientMessageType::SendMessageTo => users
+            .read()
             .await
-            .get_mut(&message.user)
+            .get(&message.user)
             .unwrap()
             .send(Ok(Message::text(
-              serde_json::to_string(&ServerMessage::RecieveFrom {
-                user: username.clone().unwrap(),
-                _type: TransferrableType::Message,
-                message: message.message,
-                file: None,
-              })
+              serde_json::to_string(&ServerMessage::recieve_message_from(
+                username.clone().unwrap(),
+                message.message.unwrap(),
+              ))
               .unwrap(),
             )))
             .unwrap(),
-          WSClientMessageType::SendFileTo => users
+          ClientMessageType::SendFileTo => users
             .write()
             .await
             .get_mut(&message.user)
             .unwrap()
             .send(Ok(Message::text(
-              serde_json::to_string(&ServerMessage::RecieveFrom {
-                user: username.clone().unwrap(),
-                _type: TransferrableType::File,
-                message: None,
-                file: message.file,
-              })
+              serde_json::to_string(&ServerMessage::recieve_file_from(
+                username.clone().unwrap(),
+                message.file.unwrap(),
+              ))
               .unwrap(),
             )))
             .unwrap(),
@@ -120,17 +144,17 @@ struct File {
   data: Vec<u8>,
 }
 #[derive(serde::Deserialize)]
-enum WSClientMessageType {
+enum ClientMessageType {
   InvitationRequest,
   SendMessageTo,
   SendFileTo,
 }
 #[derive(serde::Deserialize)]
-struct WSClientMessage {
-  pub _type: WSClientMessageType,
-  pub user: String,
-  pub message: Option<String>,
-  pub file: Option<File>,
+struct ClientMessage {
+  _type: ClientMessageType,
+  user: String,
+  message: Option<String>,
+  file: Option<File>,
 }
 
 #[derive(serde::Serialize)]
@@ -140,15 +164,97 @@ enum TransferrableType {
 }
 
 #[derive(serde::Serialize)]
-enum ServerMessage {
-  InvitationResult {
-    accepted: bool,
-    other_users: Option<Vec<String>>,
-  },
-  RecieveFrom {
-    user: String,
-    _type: TransferrableType,
-    message: Option<String>,
-    file: Option<File>,
-  },
+
+enum ServerMessageType {
+  InvitationResult,
+  RecieveFrom,
+  User,
+}
+#[derive(serde::Serialize)]
+struct ServerMessage {
+  _type: ServerMessageType,
+  accepted: Option<bool>,
+  other_users: Option<Vec<String>>,
+
+  tranferrable_type: Option<TransferrableType>,
+  message: Option<String>,
+  file: Option<File>,
+
+  user: Option<String>,
+
+  connected: Option<bool>,
+}
+impl ServerMessage {
+  fn invitation_request(accepted: bool, other_users: Option<Vec<String>>) -> Self {
+    Self {
+      _type: ServerMessageType::InvitationResult,
+      accepted: Some(accepted),
+      other_users: other_users,
+      ..Default::default()
+    }
+  }
+  fn accept_invitation_request(other_users: Vec<String>) -> Self {
+    Self {
+      _type: ServerMessageType::InvitationResult,
+      accepted: Some(true),
+      other_users: Some(other_users),
+      ..Default::default()
+    }
+  }
+  fn nah_fuck_you_man() -> Self {
+    Self {
+      _type: ServerMessageType::InvitationResult,
+      accepted: Some(false),
+      other_users: None,
+      ..Default::default()
+    }
+  }
+  fn recieve_message_from(user: String, message: String) -> Self {
+    Self {
+      _type: ServerMessageType::RecieveFrom,
+      tranferrable_type: Some(TransferrableType::Message),
+      message: Some(message),
+      user: Some(user),
+      ..Default::default()
+    }
+  }
+  fn recieve_file_from(user: String, file: File) -> Self {
+    Self {
+      _type: ServerMessageType::RecieveFrom,
+      tranferrable_type: Some(TransferrableType::File),
+      file: Some(file),
+      user: Some(user),
+      ..Default::default()
+    }
+  }
+  fn user_connected(user: String) -> Self {
+    Self {
+      _type: ServerMessageType::User,
+      connected: Some(true),
+      user: Some(user),
+      ..Default::default()
+    }
+  }
+  fn user_disconnected(user: String) -> Self {
+    Self {
+      _type: ServerMessageType::User,
+      connected: Some(false),
+      user: Some(user),
+      ..Default::default()
+    }
+  }
+}
+impl Default for ServerMessage {
+  fn default() -> Self {
+    Self {
+      _type: ServerMessageType::InvitationResult,
+      accepted: Default::default(),
+      other_users: Default::default(),
+      tranferrable_type: Default::default(),
+      message: Default::default(),
+      file: Default::default(),
+      user: Default::default(),
+      connected: Default::default(),
+    }
+  }
 }
