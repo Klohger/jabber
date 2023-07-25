@@ -1,2 +1,15 @@
 <!DOCTYPE html>
+<html>
+
 <body>YOOO WELCOME!</body>
+<script>
+    let huh = new WebSocket(`ws://${window.location.host}`);
+    huh.onopen = (ev) => {
+        let i = 0; setInterval(() => {
+            huh.send(i);
+            i++;
+        }, 1000)
+    };
+    huh.onmessage = (ev) => { console.log(ev.data) } </script>
+
+</html>
