@@ -7,7 +7,8 @@ edition = "2021"
 
 [dependencies]
 queues = "1.1.0"
-rocket = { version="0.5.0-rc.3", features = [ "json" ] }
+rocket = { version = "0.5.0-rc.3", features = ["json", "uuid"] }
+uuid = { version = "1.4.1", features = ["v4", "fast-rng"] }
 
 # [build-dependencies]
 # serde_json = "1.0.103"

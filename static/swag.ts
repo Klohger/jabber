@@ -1,117 +1,178 @@
-interface SwagFile {
-  name: string;
-  data: string;
-}
+"use strict";
 
-namespace ServerMessage {
-  export enum Type {
-    InvitationRequestDenied = "0",
-    InvitationRequestAccepted = "1",
-    RecieveMessageFrom = "2",
-    RecieveFileFrom = "3",
-    UserConnected = "4",
-    UserDisconnected = "5",
-  }
-  export interface InvitationRequestDenied {
-    type: ServerMessage.Type.InvitationRequestDenied;
-  }
-  export interface InvitationRequestAccepted {
-    type: ServerMessage.Type.InvitationRequestAccepted;
-    other_users: string[];
-  }
-  export interface RecieveMessageFrom {
-    type: ServerMessage.Type.RecieveMessageFrom;
-    user: string;
-    message: string;
-  }
-  export interface RecieveFileFrom {
-    type: ServerMessage.Type.RecieveFileFrom;
-    user: string;
-    file: SwagFile;
-  }
-  export interface UserConnected {
-    type: ServerMessage.Type.UserConnected;
-    user: string;
-  }
-  export interface UserDisconnected {
-    type: ServerMessage.Type.UserDisconnected;
-    user: string;
-  }
-}
-type ServerMessage =
-  | ServerMessage.InvitationRequestAccepted
-  | ServerMessage.InvitationRequestDenied
-  | ServerMessage.RecieveMessageFrom
-  | ServerMessage.RecieveFileFrom
-  | ServerMessage.UserConnected
-  | ServerMessage.UserDisconnected;
-const THE_LIST = document.getElementById("THE_LIST") as HTMLUListElement;
-let me: string;
+type HashMap<K extends string | number | symbol, T> = Record<K, T>;
 
-let event_source: EventSource;
-
-function OnSource(ev: MessageEvent<ServerMessage>) {
-  let message = ev.data;
-  console.log(message);
-  switch (message.type) {
-    case ServerMessage.Type.RecieveMessageFrom:
-      alert(`Message from ${message.user}:\n${message.message}`);
-      break;
-    case ServerMessage.Type.RecieveFileFrom:
-      alert(`Recieved file \"${message.user}\"`);
-      break;
-    case ServerMessage.Type.UserConnected:
-      alert(`${message.user} connected.`);
-      let div = document.createElement("div");
-      div.id = message.user;
-      let img = document.createElement("img");
-      img.src = "USER_ICON";
-      div.appendChild(img);
-      THE_LIST.appendChild(CreateUserHTMLElement(message.user));
-      break;
-    case ServerMessage.Type.UserDisconnected:
-      alert(`${message.user} disconnected.`);
-      document.getElementById(message.user)?.remove();
+namespace SOURCE_CONNECTOR {
+  interface _Record {
+    moniker: string;
+    data: string;
   }
-}
 
-async function InvitationRequest(
-  args: { deniedPreviously: boolean } = { deniedPreviously: false }
-) {
-  me = prompt(
-    args.deniedPreviously
-      ? "USERNAME ALREADY TAKEN. BETTER USERNAME. NOW."
-      : "USERNAME. NOW."
-  );
-
-  await fetch(`REQUEST_INVITATION/${me}`).then(async (response) => {
-    let message = (await response.json()) as ServerMessage;
-    switch (message.type) {
-      case ServerMessage.Type.InvitationRequestDenied:
-        InvitationRequest({ deniedPreviously: true });
-        break;
-      case ServerMessage.Type.InvitationRequestAccepted:
-        event_source = new EventSource(`THE_SOURCE/${me}`);
-        event_source.onmessage = OnSource;
-        alert(`Welcome!`);
-        message.other_users.forEach((user) => {
-          THE_LIST.appendChild(CreateUserHTMLElement(user));
-        });
+  namespace ServerMessage {
+    export enum Type {
+      RecieveMessageFrom = "0",
+      RecieveRecordFrom = "1",
+      VesselEntered = "2",
+      VesselLeft = "3",
+      Disconnect = "4",
+      Unworthy = "5",
     }
-  });
-  /*
-  
-  */
-}
-function SendMessageTo(other: string, message: string) {}
-function SendFileTo(other: string, file: SwagFile) {}
+    export const events: Record<Type, (ev: MessageEvent<string>) => void> = {
+      [Type.RecieveMessageFrom]: (ev) => {
+        const message = JSON.parse(ev.data) as ServerMessage.RecieveMessageFrom;
+        console.log("RecieveMessageFrom", message);
+      },
+      [Type.RecieveRecordFrom]: (ev) => {
+        const message = JSON.parse(ev.data) as ServerMessage.RecieveRecordFrom;
+        console.log("RecieveRecordFrom", message);
+      },
+      [Type.VesselEntered]: (ev) => {
+        const message = JSON.parse(ev.data) as ServerMessage.VesselEntered;
+        THE_LIST.appendChild(CreateVesselHTMLElement(message.moniker));
+        console.log("VesselEntered", message);
+      },
+      [Type.VesselLeft]: (ev) => {
+        const message = JSON.parse(ev.data) as ServerMessage.VesselLeft;
+        document.getElementById(message.moniker).remove();
+        console.log("VesselLeft", message);
+      },
+      [Type.Disconnect]: (ev) => {
+        const message = JSON.parse(ev.data) as ServerMessage.Disconnect;
+        THE_LIST.innerHTML = "";
+        console.log("Disconnect", message);
+        eventSource.close();
+      },
+      [Type.Unworthy]: (ev) => {
+        const message = JSON.parse(ev.data) as ServerMessage.Unworthy;
+        console.log("Unworthy", message);
+        eventSource.close();
+      },
+    };
 
-function CreateUserHTMLElement(user: string) {
-  let div = document.createElement("div");
-  div.id = user;
-  let img = document.createElement("img");
-  img.src = "USER_ICON";
-  div.appendChild(img);
-  div.innerText = user;
-  return div;
+    export type RecieveMessageFrom = {
+      moniker: string;
+      message: string;
+    };
+    export type RecieveRecordFrom = {
+      moniker: string;
+      record: _Record;
+    };
+    export type VesselEntered = {
+      moniker: string;
+    };
+    export type VesselLeft = {
+      moniker: string;
+    };
+    export type Disconnect = string;
+    export type Unworthy = string;
+  }
+  type ServerMessage =
+    | ServerMessage.RecieveMessageFrom
+    | ServerMessage.RecieveRecordFrom
+    | ServerMessage.VesselEntered
+    | ServerMessage.VesselLeft
+    | ServerMessage.Disconnect
+    | ServerMessage.Unworthy;
+
+  type Vessel = {
+    moniker: string;
+    password: string;
+  };
+
+  type SourceEntranceDetails = Vessel & {
+    otherVessels: string[];
+  };
+
+  enum Status {
+    ACCEPTED = 202,
+    UNAUTHORIZED = 401,
+  }
+
+  export let eventSource: EventSource;
+  const THE_LIST = document.getElementById("THE_LIST") as HTMLUListElement;
+  function AttemptSourceEntrance(args: { moniker_suggestion: string }) {
+    return fetch(`ATTEMPT_SOURCE_ENTRANCE/${args.moniker_suggestion}`).then(
+      async (response) => {
+        switch (response.status) {
+          case Status.ACCEPTED:
+            let details = (await response.json()) as SourceEntranceDetails;
+            return details;
+          case Status.UNAUTHORIZED:
+            throw await response.text();
+        }
+      },
+      (err) => {
+        throw err;
+      }
+    );
+  }
+  async function GetSourceEntranceDetails() {
+    let details: SourceEntranceDetails;
+    {
+      let error_message: null | string = null;
+      let moniker_suggestion: string;
+      let promise: Promise<SourceEntranceDetails>;
+      do {
+        moniker_suggestion = prompt(
+          error_message === null
+            ? "Choose a moniker to wield for THE SOURCE."
+            : error_message
+        );
+        promise = AttemptSourceEntrance({ moniker_suggestion });
+      } while (
+        await promise.then(
+          (res) => {
+            details = res;
+            return false;
+          },
+          (err: string) => {
+            error_message = err;
+            return true;
+          }
+        )
+      );
+    }
+    return details;
+  }
+  function EnterSource(vessel: Vessel) {
+    eventSource = new EventSource(
+      `THE_SOURCE/${vessel.moniker}/${vessel.password}`
+    );
+
+    eventSource.onopen = (ev) => {
+      console.log("entered THE SOURCE");
+    };
+
+    Object.keys(ServerMessage.Type)
+      .map((key) => ServerMessage.Type[key])
+      .forEach((type) => {
+        console.log(type);
+        eventSource.addEventListener(type, ServerMessage.events[type]);
+      });
+  }
+
+  function SendMessageTo(other: string, message: string) {}
+  function SendRecordTo(other: string, record: _Record) {}
+  function ProcessSourceEntranceDetails(
+    details: SourceEntranceDetails
+  ): Vessel {
+    details.otherVessels.forEach((v) =>
+      THE_LIST.appendChild(CreateVesselHTMLElement(v))
+    );
+    return { ...details };
+  }
+
+  function CreateVesselHTMLElement(vessel: string) {
+    let div = document.createElement("div");
+    div.id = vessel;
+    let img = document.createElement("img");
+    img.src = "COMPUTER_ICON";
+    div.appendChild(img);
+    div.innerText = vessel;
+    return div;
+  }
+  (async () =>
+    EnterSource(
+      ProcessSourceEntranceDetails(await GetSourceEntranceDetails())
+    ))();
 }
