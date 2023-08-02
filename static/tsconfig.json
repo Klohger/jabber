@@ -1,7 +1,10 @@
 {
-    "compilerOptions": {
-      "target": "es6",
-      "module": "commonjs",
-      "sourceMap": true
-    }
+  "extends": ["./base/tsconfig.json"],
+  "compilerOptions": {
+    "target": "ES2015",
+    "module": "None",
+    
+    "strict": false,
+    "strictFunctionTypes": false
   }
+}

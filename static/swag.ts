@@ -1,53 +1,63 @@
-"use strict";
-
-type HashMap<K extends string | number | symbol, T> = Record<K, T>;
-
 namespace SOURCE_CONNECTOR {
-  interface _Record {
+  interface Record {
     moniker: string;
     data: string;
   }
 
   namespace ServerMessage {
-    export enum Type {
-      RecieveMessageFrom = "0",
-      RecieveRecordFrom = "1",
-      VesselEntered = "2",
-      VesselLeft = "3",
-      Disconnect = "4",
-      Unworthy = "5",
-    }
-    export const events: Record<Type, (ev: MessageEvent<string>) => void> = {
-      [Type.RecieveMessageFrom]: (ev) => {
-        const message = JSON.parse(ev.data) as ServerMessage.RecieveMessageFrom;
-        console.log("RecieveMessageFrom", message);
-      },
-      [Type.RecieveRecordFrom]: (ev) => {
-        const message = JSON.parse(ev.data) as ServerMessage.RecieveRecordFrom;
-        console.log("RecieveRecordFrom", message);
-      },
-      [Type.VesselEntered]: (ev) => {
-        const message = JSON.parse(ev.data) as ServerMessage.VesselEntered;
-        THE_LIST.appendChild(CreateVesselHTMLElement(message.moniker));
-        console.log("VesselEntered", message);
-      },
-      [Type.VesselLeft]: (ev) => {
-        const message = JSON.parse(ev.data) as ServerMessage.VesselLeft;
-        document.getElementById(message.moniker).remove();
-        console.log("VesselLeft", message);
-      },
-      [Type.Disconnect]: (ev) => {
-        const message = JSON.parse(ev.data) as ServerMessage.Disconnect;
-        THE_LIST.innerHTML = "";
-        console.log("Disconnect", message);
-        eventSource.close();
-      },
-      [Type.Unworthy]: (ev) => {
-        const message = JSON.parse(ev.data) as ServerMessage.Unworthy;
-        console.log("Unworthy", message);
-        eventSource.close();
-      },
-    };
+    export const events: [string, (ev: MessageEvent<string>) => void][] = [
+      [
+        "RecieveMessageFrom",
+        (ev) => {
+          const message = JSON.parse(
+            ev.data
+          ) as ServerMessage.RecieveMessageFrom;
+          console.log("RecieveMessageFrom", message);
+        },
+      ],
+      [
+        "RecieveRecordFrom",
+        (ev) => {
+          const message = JSON.parse(
+            ev.data
+          ) as ServerMessage.RecieveRecordFrom;
+          console.log("RecieveRecordFrom", message);
+        },
+      ],
+      [
+        "VesselEntered",
+        (ev) => {
+          const message = JSON.parse(ev.data) as ServerMessage.VesselEntered;
+          THE_LIST.appendChild(CreateVesselHTMLElement(message.moniker));
+          console.log("VesselEntered", message);
+        },
+      ],
+      [
+        "VesselLeft",
+        (ev) => {
+          const message = JSON.parse(ev.data) as ServerMessage.VesselLeft;
+          document.getElementById(message.moniker)?.remove();
+          console.log("VesselLeft", message);
+        },
+      ],
+      [
+        "Disconnect",
+        (ev) => {
+          const message = JSON.parse(ev.data) as ServerMessage.Disconnect;
+          THE_LIST.innerHTML = "";
+          console.log("Disconnect", message);
+          eventSource.close();
+        },
+      ],
+      [
+        "Unworthy",
+        (ev) => {
+          const message = JSON.parse(ev.data) as ServerMessage.Unworthy;
+          console.log("Unworthy", message);
+          eventSource.close();
+        },
+      ],
+    ];
 
     export type RecieveMessageFrom = {
       moniker: string;
@@ -55,7 +65,7 @@ namespace SOURCE_CONNECTOR {
     };
     export type RecieveRecordFrom = {
       moniker: string;
-      record: _Record;
+      record: Record;
     };
     export type VesselEntered = {
       moniker: string;
@@ -83,7 +93,7 @@ namespace SOURCE_CONNECTOR {
     otherVessels: string[];
   };
 
-  enum Status {
+  const enum Status {
     ACCEPTED = 202,
     UNAUTHORIZED = 401,
   }
@@ -92,14 +102,13 @@ namespace SOURCE_CONNECTOR {
   const THE_LIST = document.getElementById("THE_LIST") as HTMLUListElement;
   function AttemptSourceEntrance(args: { moniker_suggestion: string }) {
     return fetch(`ATTEMPT_SOURCE_ENTRANCE/${args.moniker_suggestion}`).then(
-      async (response) => {
+      async (response): Promise<SourceEntranceDetails> => {
         switch (response.status) {
           case Status.ACCEPTED:
             let details = (await response.json()) as SourceEntranceDetails;
             return details;
-          case Status.UNAUTHORIZED:
-            throw await response.text();
         }
+        throw await response.text();
       },
       (err) => {
         throw err;
@@ -107,17 +116,18 @@ namespace SOURCE_CONNECTOR {
     );
   }
   async function GetSourceEntranceDetails() {
-    let details: SourceEntranceDetails;
+    let details!: SourceEntranceDetails;
     {
       let error_message: null | string = null;
-      let moniker_suggestion: string;
-      let promise: Promise<SourceEntranceDetails>;
+      let moniker_suggestion: string | null;
+      let promise!: Promise<SourceEntranceDetails>;
       do {
         moniker_suggestion = prompt(
           error_message === null
             ? "Choose a moniker to wield for THE SOURCE."
             : error_message
         );
+        if (moniker_suggestion === null) continue;
         promise = AttemptSourceEntrance({ moniker_suggestion });
       } while (
         await promise.then(
@@ -139,20 +149,16 @@ namespace SOURCE_CONNECTOR {
       `THE_SOURCE/${vessel.moniker}/${vessel.password}`
     );
 
-    eventSource.onopen = (ev) => {
+    eventSource.onopen = (_) => {
       console.log("entered THE SOURCE");
     };
-
-    Object.keys(ServerMessage.Type)
-      .map((key) => ServerMessage.Type[key])
-      .forEach((type) => {
-        console.log(type);
-        eventSource.addEventListener(type, ServerMessage.events[type]);
-      });
+    ServerMessage.events.forEach(([type, event]) =>
+      eventSource.addEventListener(type, event)
+    );
   }
 
   function SendMessageTo(other: string, message: string) {}
-  function SendRecordTo(other: string, record: _Record) {}
+  function SendRecordTo(other: string, record: Record) {}
   function ProcessSourceEntranceDetails(
     details: SourceEntranceDetails
   ): Vessel {
