@@ -1,1 +1,134 @@
-"use strict";var SOURCE_CONNECTOR,__awaiter=this&&this.__awaiter||function(e,t,n,o){return new(n||(n=Promise))(function(r,i){function a(e){try{s(o.next(e))}catch(t){i(t)}}function l(e){try{s(o.throw(e))}catch(t){i(t)}}function s(e){var t;e.done?r(e.value):((t=e.value)instanceof n?t:new n(function(e){e(t)})).then(a,l)}s((o=o.apply(e,t||[])).next())})};!function(e){var t;let n;(t=n||(n={})).events=[["RecieveMessageFrom",e=>{let t=JSON.parse(e.data);console.log("RecieveMessageFrom",t)},],["RecieveRecordFrom",e=>{let t=JSON.parse(e.data);console.log("RecieveRecordFrom",t)},],["VesselEntered",e=>{let t=JSON.parse(e.data);o.appendChild(l(t.moniker)),console.log("VesselEntered",t)},],["VesselLeft",e=>{var t;let n=JSON.parse(e.data);null===(t=document.getElementById(n.moniker))||void 0===t||t.remove(),console.log("VesselLeft",n)},],["Disconnect",t=>{let n=JSON.parse(t.data);o.innerHTML="",console.log("Disconnect",n),e.eventSource.close()},],["Unworthy",t=>{let n=JSON.parse(t.data);console.log("Unworthy",n),e.eventSource.close()},],];let o=document.getElementById("THE_LIST");function r(e){return fetch(`ATTEMPT_SOURCE_ENTRANCE/${e.moniker_suggestion}`).then(e=>__awaiter(this,void 0,void 0,function*(){if(202===e.status)return yield e.json();throw yield e.text()}),e=>{throw e})}function i(e,t){}function a(e,t){}function l(e){let t=document.createElement("div");t.id=e;let n=document.createElement("img");return n.src="COMPUTER_ICON",t.appendChild(n),t.innerText=e,t}__awaiter(this,void 0,void 0,function*(){var t,i;return i=((t=yield function e(){return __awaiter(this,void 0,void 0,function*(){let e;{let t=null,n,o;do{if(null===(n=prompt(null===t?"Choose a moniker to wield for THE SOURCE.":t)))continue;o=r({moniker_suggestion:n})}while(yield o.then(t=>(e=t,!1),e=>(t=e,!0)))}return e})}()).otherVessels.forEach(e=>o.appendChild(l(e))),Object.assign({},t)),void(e.eventSource=new EventSource(`THE_SOURCE/${i.moniker}/${i.password}`),e.eventSource.onopen=e=>{console.log("entered THE SOURCE")},n.events.forEach(([t,n])=>e.eventSource.addEventListener(t,n)))})}(SOURCE_CONNECTOR||(SOURCE_CONNECTOR={}));//# sourceMappingURL=swag.js.map
+"use strict";
+var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, generator) {
+    function adopt(value) { return value instanceof P ? value : new P(function (resolve) { resolve(value); }); }
+    return new (P || (P = Promise))(function (resolve, reject) {
+        function fulfilled(value) { try { step(generator.next(value)); } catch (e) { reject(e); } }
+        function rejected(value) { try { step(generator["throw"](value)); } catch (e) { reject(e); } }
+        function step(result) { result.done ? resolve(result.value) : adopt(result.value).then(fulfilled, rejected); }
+        step((generator = generator.apply(thisArg, _arguments || [])).next());
+    });
+};
+var SOURCE_CONNECTOR;
+(function (SOURCE_CONNECTOR) {
+    let ServerMessage;
+    (function (ServerMessage) {
+        ServerMessage.events = [
+            [
+                "RecieveMissiveFrom",
+                (ev) => {
+                    const message = JSON.parse(ev.data);
+                    console.log(ev.type, message);
+                },
+            ],
+            [
+                "RecieveRecordFrom",
+                (ev) => {
+                    const message = JSON.parse(ev.data);
+                    console.log(ev.type, message);
+                },
+            ],
+            [
+                "VesselEntered",
+                (ev) => {
+                    const message = JSON.parse(ev.data);
+                    THE_LIST.appendChild(CreateVesselHTMLElement(message.moniker));
+                    console.log(ev.type, message);
+                },
+            ],
+            [
+                "VesselLeft",
+                (ev) => {
+                    const message = JSON.parse(ev.data);
+                    document.querySelectorAll(`[vessel="${message.moniker}"]`).item(0)
+                        .remove;
+                    console.log(ev.type, message);
+                },
+            ],
+            [
+                "ForcefulLeave",
+                (ev) => {
+                    const message = JSON.parse(ev.data);
+                    THE_LIST.innerHTML = "";
+                    console.log(ev.type, message);
+                    eventSource.close();
+                },
+            ],
+            [
+                "Unworthy",
+                (ev) => {
+                    const message = JSON.parse(ev.data);
+                    console.log(ev.type, message);
+                    eventSource.close();
+                },
+            ],
+        ];
+    })(ServerMessage || (ServerMessage = {}));
+    let eventSource;
+    const THE_LIST = document.getElementById("THE_LIST");
+    function RequestInvitation(args) {
+        return fetch(`THE_SOURCE/REQUEST_INVITATION/${args.moniker_suggestion}`).then((response) => __awaiter(this, void 0, void 0, function* () {
+            switch (response.status) {
+                case 202:
+                    let details = (yield response.json());
+                    return details;
+            }
+            throw yield response.text();
+        }), (err) => {
+            throw err;
+        });
+    }
+    function RecieveInvitation() {
+        return __awaiter(this, void 0, void 0, function* () {
+            let details;
+            {
+                let error_message = null;
+                let moniker_suggestion;
+                let promise;
+                do {
+                    moniker_suggestion = prompt(error_message === null
+                        ? "Choose a moniker to wield for THE SOURCE."
+                        : error_message);
+                    if (moniker_suggestion === null)
+                        continue;
+                    promise = RequestInvitation({ moniker_suggestion });
+                } while (yield promise.then((res) => {
+                    details = res;
+                    return false;
+                }, (err) => {
+                    error_message = err;
+                    return true;
+                }));
+            }
+            return details;
+        });
+    }
+    function EnterSource(vessel) {
+        eventSource = new EventSource(`THE_SOURCE/ENTER/${vessel.moniker}/${vessel.password}`);
+        eventSource.onopen = (_) => {
+            console.log("entered THE SOURCE");
+        };
+        ServerMessage.events.forEach(([type, event]) => {
+            console.log(type);
+            eventSource.addEventListener(type, event);
+        });
+    }
+    function SendMessageTo(other, message) { }
+    function SendRecordTo(other, record) { }
+    function ProcessInvitation(details) {
+        details.otherVessels.forEach((v) => THE_LIST.appendChild(CreateVesselHTMLElement(v)));
+        return Object.assign({}, details);
+    }
+    function CreateVesselHTMLElement(vessel) {
+        let div = document.createElement("div");
+        div.setAttribute("vessel", vessel);
+        let img = document.createElement("img");
+        img.src = "COMPUTER_ICON";
+        img.style.height = "1rem";
+        img.style.width = "1rem";
+        div.appendChild(img);
+        div.appendChild(document.createTextNode(vessel));
+        return div;
+    }
+    (() => __awaiter(this, void 0, void 0, function* () { return EnterSource(ProcessInvitation(yield RecieveInvitation())); }))();
+})(SOURCE_CONNECTOR || (SOURCE_CONNECTOR = {}));
+//# sourceMappingURL=swag.js.map

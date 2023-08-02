@@ -7,12 +7,12 @@ namespace SOURCE_CONNECTOR {
   namespace ServerMessage {
     export const events: [string, (ev: MessageEvent<string>) => void][] = [
       [
-        "RecieveMessageFrom",
+        "RecieveMissiveFrom",
         (ev) => {
           const message = JSON.parse(
             ev.data
-          ) as ServerMessage.RecieveMessageFrom;
-          console.log("RecieveMessageFrom", message);
+          ) as ServerMessage.RecieveMissiveFrom;
+          console.log(ev.type, message);
         },
       ],
       [
@@ -21,7 +21,7 @@ namespace SOURCE_CONNECTOR {
           const message = JSON.parse(
             ev.data
           ) as ServerMessage.RecieveRecordFrom;
-          console.log("RecieveRecordFrom", message);
+          console.log(ev.type, message);
         },
       ],
       [
@@ -29,23 +29,24 @@ namespace SOURCE_CONNECTOR {
         (ev) => {
           const message = JSON.parse(ev.data) as ServerMessage.VesselEntered;
           THE_LIST.appendChild(CreateVesselHTMLElement(message.moniker));
-          console.log("VesselEntered", message);
+          console.log(ev.type, message);
         },
       ],
       [
         "VesselLeft",
         (ev) => {
           const message = JSON.parse(ev.data) as ServerMessage.VesselLeft;
-          document.getElementById(message.moniker)?.remove();
-          console.log("VesselLeft", message);
+          document.querySelectorAll(`[vessel="${message.moniker}"]`).item(0)
+            .remove;
+          console.log(ev.type, message);
         },
       ],
       [
-        "Disconnect",
+        "ForcefulLeave",
         (ev) => {
-          const message = JSON.parse(ev.data) as ServerMessage.Disconnect;
+          const message = JSON.parse(ev.data) as ServerMessage.ForcefulLeave;
           THE_LIST.innerHTML = "";
-          console.log("Disconnect", message);
+          console.log(ev.type, message);
           eventSource.close();
         },
       ],
@@ -53,13 +54,13 @@ namespace SOURCE_CONNECTOR {
         "Unworthy",
         (ev) => {
           const message = JSON.parse(ev.data) as ServerMessage.Unworthy;
-          console.log("Unworthy", message);
+          console.log(ev.type, message);
           eventSource.close();
         },
       ],
     ];
 
-    export type RecieveMessageFrom = {
+    export type RecieveMissiveFrom = {
       moniker: string;
       message: string;
     };
@@ -73,15 +74,15 @@ namespace SOURCE_CONNECTOR {
     export type VesselLeft = {
       moniker: string;
     };
-    export type Disconnect = string;
+    export type ForcefulLeave = string;
     export type Unworthy = string;
   }
   type ServerMessage =
-    | ServerMessage.RecieveMessageFrom
+    | ServerMessage.RecieveMissiveFrom
     | ServerMessage.RecieveRecordFrom
     | ServerMessage.VesselEntered
     | ServerMessage.VesselLeft
-    | ServerMessage.Disconnect
+    | ServerMessage.ForcefulLeave
     | ServerMessage.Unworthy;
 
   type Vessel = {
@@ -98,10 +99,12 @@ namespace SOURCE_CONNECTOR {
     UNAUTHORIZED = 401,
   }
 
-  export let eventSource: EventSource;
+  let eventSource!: EventSource;
   const THE_LIST = document.getElementById("THE_LIST") as HTMLUListElement;
-  function AttemptSourceEntrance(args: { moniker_suggestion: string }) {
-    return fetch(`ATTEMPT_SOURCE_ENTRANCE/${args.moniker_suggestion}`).then(
+  function RequestInvitation(args: { moniker_suggestion: string }) {
+    return fetch(
+      `THE_SOURCE/REQUEST_INVITATION/${args.moniker_suggestion}`
+    ).then(
       async (response): Promise<SourceEntranceDetails> => {
         switch (response.status) {
           case Status.ACCEPTED:
@@ -115,7 +118,7 @@ namespace SOURCE_CONNECTOR {
       }
     );
   }
-  async function GetSourceEntranceDetails() {
+  async function RecieveInvitation() {
     let details!: SourceEntranceDetails;
     {
       let error_message: null | string = null;
@@ -128,7 +131,7 @@ namespace SOURCE_CONNECTOR {
             : error_message
         );
         if (moniker_suggestion === null) continue;
-        promise = AttemptSourceEntrance({ moniker_suggestion });
+        promise = RequestInvitation({ moniker_suggestion });
       } while (
         await promise.then(
           (res) => {
@@ -146,22 +149,21 @@ namespace SOURCE_CONNECTOR {
   }
   function EnterSource(vessel: Vessel) {
     eventSource = new EventSource(
-      `THE_SOURCE/${vessel.moniker}/${vessel.password}`
+      `THE_SOURCE/ENTER/${vessel.moniker}/${vessel.password}`
     );
 
     eventSource.onopen = (_) => {
       console.log("entered THE SOURCE");
     };
-    ServerMessage.events.forEach(([type, event]) =>
-      eventSource.addEventListener(type, event)
-    );
+    ServerMessage.events.forEach(([type, event]) => {
+      console.log(type);
+      eventSource.addEventListener(type, event);
+    });
   }
 
   function SendMessageTo(other: string, message: string) {}
   function SendRecordTo(other: string, record: Record) {}
-  function ProcessSourceEntranceDetails(
-    details: SourceEntranceDetails
-  ): Vessel {
+  function ProcessInvitation(details: SourceEntranceDetails): Vessel {
     details.otherVessels.forEach((v) =>
       THE_LIST.appendChild(CreateVesselHTMLElement(v))
     );
@@ -170,15 +172,16 @@ namespace SOURCE_CONNECTOR {
 
   function CreateVesselHTMLElement(vessel: string) {
     let div = document.createElement("div");
-    div.id = vessel;
+
+    div.setAttribute("vessel", vessel);
     let img = document.createElement("img");
     img.src = "COMPUTER_ICON";
+    img.style.height="1rem"
+    img.style.width="1rem"
     div.appendChild(img);
-    div.innerText = vessel;
+    div.appendChild(document.createTextNode(vessel));
     return div;
   }
-  (async () =>
-    EnterSource(
-      ProcessSourceEntranceDetails(await GetSourceEntranceDetails())
-    ))();
+
+  (async () => EnterSource(ProcessInvitation(await RecieveInvitation())))();
 }
