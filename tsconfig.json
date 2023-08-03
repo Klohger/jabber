@@ -1,0 +1,18 @@
+{
+  "extends": ["./base/tsconfig.json"],
+  "compilerOptions": {
+    "target": "ES2015",
+    "module": "None",
+    "strict": false,
+    "strictFunctionTypes": false,
+    "outDir": "./ts_out/",
+    "listEmittedFiles": true,
+    "declarationMap": false,
+    "declaration": false,
+    "sourceMap": false
+  },
+
+  "files": ["src/swag.ts"],
+
+  "compileOnSave": true
+}

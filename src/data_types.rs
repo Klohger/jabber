@@ -1,12 +1,5 @@
 use queues::{IsQueue, Queue};
-use rocket::{
-  futures::Stream,
-  response::{
-    stream::{Event, EventStream},
-    Responder,
-  },
-  serde::{self, uuid::Uuid},
-};
+use rocket::serde::{self, uuid::Uuid};
 
 #[derive(serde::Deserialize, serde::Serialize, Clone)]
 #[serde(crate = "rocket::serde")]
@@ -46,16 +39,19 @@ impl Vessel {
     self.missives.add(missive).unwrap();
   }
 }
-
+/*
 pub struct EventStreamProtector<S>(EventStream<S>);
 
-impl<'r, S: Stream<Item = Event> + Send + 'r> Responder<'r,'r> for EventStreamProtector<S>
-{
+impl<'r, S: Stream<Item = Event> + Send + 'r> Responder<'r, 'r> for EventStreamProtector<S> {
   fn respond_to(self, request: &'r rocket::Request<'_>) -> rocket::response::Result<'r> {
     match self.0.respond_to(request) {
-        Err(_) => todo!(),
-        r => r
+      Err(_) => todo!(),
+      r => r,
     }
-    
   }
 }
+macro_rules! EventStreamProtector {
+      () => ($crate::_typed_stream!(EventStream, $crate::response::stream::Event));
+      ($($s:tt)*) => ($crate::_typed_stream!(EventStream, $($s)*));
+  }
+*/

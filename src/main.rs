@@ -108,7 +108,7 @@ fn enter<'a>(
       .await
       .add_missive(SourceMissive::VesselLeft { moniker });
   }
-  EventStream! {
+  let stream = EventStream! {
     if vessels.joining_vessels.read().await.contains_key(&moniker)
     && vessels.joining_vessels.read().await.get(&moniker).unwrap().read().await.password == password
     {
@@ -178,8 +178,13 @@ fn enter<'a>(
       yield Event::json(&SourceMissive::Unworthy("...but THE SOURCE did not respond. Perhaps it did not see you worthy. (Invalid Credentials)".to_owned()))
         .event("Unworthy");
     }
+    
+    println!("wowie");
+  };
+  
+  println!("wowie");
+  stream
 
-  }
 }
 
 #[get("/SEND_MISSIVE/<moniker>/<password>/<other>/<missive>")]

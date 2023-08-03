@@ -47,7 +47,7 @@ namespace SOURCE_CONNECTOR {
           const message = JSON.parse(ev.data) as ServerMessage.ForcefulLeave;
           THE_LIST.innerHTML = "";
           console.log(ev.type, message);
-          eventSource.close();
+          SOURCE_CONNECTION.close();
         },
       ],
       [
@@ -55,7 +55,7 @@ namespace SOURCE_CONNECTOR {
         (ev) => {
           const message = JSON.parse(ev.data) as ServerMessage.Unworthy;
           console.log(ev.type, message);
-          eventSource.close();
+          SOURCE_CONNECTION.close();
         },
       ],
     ];
@@ -99,13 +99,13 @@ namespace SOURCE_CONNECTOR {
     UNAUTHORIZED = 401,
   }
 
-  let eventSource!: EventSource;
+  let SOURCE_CONNECTION!: EventSource;
   const THE_LIST = document.getElementById("THE_LIST") as HTMLUListElement;
   function RequestInvitation(args: { moniker_suggestion: string }) {
     return fetch(
       `THE_SOURCE/REQUEST_INVITATION/${args.moniker_suggestion}`
     ).then(
-      async (response): Promise<SourceEntranceDetails> => {
+      async (response) => {
         switch (response.status) {
           case Status.ACCEPTED:
             let details = (await response.json()) as SourceEntranceDetails;
@@ -148,17 +148,18 @@ namespace SOURCE_CONNECTOR {
     return details;
   }
   function EnterSource(vessel: Vessel) {
-    eventSource = new EventSource(
+    let THE_SOURCE = new EventSource(
       `THE_SOURCE/ENTER/${vessel.moniker}/${vessel.password}`
     );
 
-    eventSource.onopen = (_) => {
+    THE_SOURCE.onopen = (_) => {
       console.log("entered THE SOURCE");
     };
     ServerMessage.events.forEach(([type, event]) => {
       console.log(type);
-      eventSource.addEventListener(type, event);
+      THE_SOURCE.addEventListener(type, event);
     });
+    return THE_SOURCE;
   }
 
   function SendMessageTo(other: string, message: string) {}
@@ -167,7 +168,8 @@ namespace SOURCE_CONNECTOR {
     details.otherVessels.forEach((v) =>
       THE_LIST.appendChild(CreateVesselHTMLElement(v))
     );
-    return { ...details };
+    const { moniker, password } = details;
+    return { moniker, password };
   }
 
   function CreateVesselHTMLElement(vessel: string) {
@@ -176,12 +178,15 @@ namespace SOURCE_CONNECTOR {
     div.setAttribute("vessel", vessel);
     let img = document.createElement("img");
     img.src = "COMPUTER_ICON";
-    img.style.height="1rem"
-    img.style.width="1rem"
+    img.style.height = "1rem";
+    img.style.width = "1rem";
     div.appendChild(img);
     div.appendChild(document.createTextNode(vessel));
     return div;
   }
 
-  (async () => EnterSource(ProcessInvitation(await RecieveInvitation())))();
+  (async () =>
+    (SOURCE_CONNECTION = EnterSource(
+      ProcessInvitation(await RecieveInvitation())
+    )))();
 }
