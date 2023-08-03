@@ -5,7 +5,7 @@
     "module": "None",
     "strict": false,
     "strictFunctionTypes": false,
-    "outDir": "./ts_out/",
+    "outDir": "./static",
     "listEmittedFiles": true,
     "declarationMap": false,
     "declaration": false,

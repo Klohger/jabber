@@ -2,27 +2,36 @@ use queues::{IsQueue, Queue};
 use rocket::serde::{self, uuid::Uuid};
 
 #[derive(serde::Deserialize, serde::Serialize, Clone)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 #[serde(crate = "rocket::serde")]
 pub struct Record {
-  pub moniker: String,
+  pub file_name: String,
   pub data: String,
 }
 
 #[derive(serde::Serialize, Clone)]
-#[serde(rename_all = "camelCase")]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 #[serde(untagged)]
 #[serde(crate = "rocket::serde")]
 pub enum SourceMissive {
-  RecieveMissiveFrom { moniker: String, missive: String },
-  RecieveRecordFrom { moniker: String, record: Record },
+  RecieveMedia { moniker: String, media: Media },
   VesselEntered { moniker: String },
   VesselLeft { moniker: String },
   ForcefulLeave(String),
   Unworthy(String),
 }
 
+#[derive(serde::Serialize, serde::Deserialize, Clone)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+#[serde(tag="TYPE")]
+#[serde(crate = "rocket::serde")]
+pub enum Media {
+  Missive(String),
+  Record(Record),
+}
+
 #[derive(serde::Serialize)]
-#[serde(rename_all = "camelCase")]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 #[serde(crate = "rocket::serde")]
 pub struct Invitation {
   pub moniker: String,
