@@ -1,0 +1,128 @@
+* {
+  margin: 0;
+  padding: 0;
+  color: black;
+  background: #cfcfcf;
+  font-family: unset;
+  user-select: none;
+  width: fit-content;
+  height: fit-content;
+  box-sizing: border-box;
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
+  image-rendering: -moz-crisp-edges;
+  image-rendering: optimizeSpeed;
+  text-rendering: optimizeSpeed;
+  font-weight: bold;
+  padding-inline: 0;
+  border: none;
+}
+
+html,
+body {
+  width: 100%;
+  height: 100%;
+}
+
+body {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.IN {
+  border: #e6e6e6 inset 0.5rem;
+}
+.OUT {
+  border: #e6e6e6 outset 0.5rem;
+}
+
+.CONNECTOR {
+  width: fit-content;
+  height: fit-content;
+  margin: auto;
+}
+#CONNECT_BUTTON {
+  margin-left: auto;
+  margin-right: auto;
+  width: fit-content;
+  font-size: 2rem;
+  font-weight: bold;
+}
+table {
+  border-spacing: 0;
+}
+
+#THE_TABLE {
+  vertical-align: middle;
+}
+#THE_TABLE {
+  vertical-align: middle;
+}
+.VESSEL > td > * {
+  height: 3.375rem;
+}
+.VESSEL > :first-child,
+.VESSEL > :not(:last-child) {
+  border-right: none;
+}
+.VESSEL > :last-child,
+.VESSEL > :not(:first-child) {
+  border-left: none;
+}
+
+.STATUS > div {
+  width: 3.375rem;
+  background: url(STATUS/0), #cfcfcf;
+  background-size: contain;
+  background-repeat: no-repeat;
+  background-position: center;
+}
+.NAME > div > div {
+  font-size: 1.5rem;
+  font-weight: bold;
+}
+.BUTTON {
+  background: #cfcfcf;
+  border: #e6e6e6 outset 0.5rem;
+  color: blue;
+}
+.BUTTON > * {
+  color: blue;
+}
+.BUTTON:hover > * {
+  background: #dddcdc;
+  color: rgb(42, 42, 255);
+
+  cursor: pointer;
+}
+.BUTTON:active {
+  background: #bdbdbd;
+  border: #e6e6e6 inset 0.5rem;
+  color: rgb(0, 0, 150);
+}
+.RECORD_INPUT input[type="file"] {
+  display: none;
+}
+.RECORD_INPUT > div > div::before {
+  content: "📁";
+}
+input[type="text"] {
+  text-transform: uppercase;
+  background: rgb(241, 241, 241);
+}
+
+.CENTERER {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.H1 {
+  font-size: 2rem;
+  font-weight: bold;
+}
+.H2 {
+  font-size: 1.5rem;
+  font-weight: bold;
+}

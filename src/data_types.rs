@@ -1,5 +1,10 @@
+use std::{collections::HashMap, sync::Arc};
+
 use queues::{IsQueue, Queue};
-use rocket::serde::{self, uuid::Uuid};
+use rocket::{
+  serde::{self, uuid::Uuid},
+  tokio::sync::RwLock,
+};
 
 #[derive(serde::Deserialize, serde::Serialize, Clone)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
@@ -10,20 +15,30 @@ pub struct Record {
 }
 
 #[derive(serde::Serialize, Clone)]
-#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 #[serde(untagged)]
 #[serde(crate = "rocket::serde")]
 pub enum SourceMissive {
-  RecieveMedia { moniker: String, media: Media },
-  VesselEntered { moniker: String },
-  VesselLeft { moniker: String },
+  RecieveMedia {
+    #[serde(rename = "MONIKER")]
+    moniker: String,
+    #[serde(rename = "MEDIA")]
+    media: Media,
+  },
+  VesselEntered {
+    #[serde(rename = "MONIKER")]
+    moniker: String,
+  },
+  VesselLeft {
+    #[serde(rename = "MONIKER")]
+    moniker: String,
+  },
   ForcefulLeave(String),
   Unworthy(String),
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
-#[serde(tag="TYPE")]
+#[serde(tag = "TYPE")]
 #[serde(crate = "rocket::serde")]
 pub enum Media {
   Missive(String),
@@ -48,6 +63,21 @@ impl Vessel {
     self.missives.add(missive).unwrap();
   }
 }
+pub struct JoiningVessel {
+  pub started_joining: rocket::time::Instant,
+  pub password: Uuid,
+}
+
+pub type Vessels = Arc<CurrentVessels>;
+
+#[derive(Default)]
+pub struct CurrentVessels {
+  pub active_vessels: RwLock<HashMap<String, Arc<RwLock<Vessel>>>>,
+  pub joining_vessels: RwLock<HashMap<String, Arc<JoiningVessel>>>,
+}
+
+pub const TIME_OUT: rocket::time::Duration = rocket::time::Duration::hours(24);
+pub const JOIN_TIME_OUT: rocket::time::Duration = rocket::time::Duration::seconds(60);
 /*
 pub struct EventStreamProtector<S>(EventStream<S>);
 

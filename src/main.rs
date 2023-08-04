@@ -1,49 +1,45 @@
 #[macro_use]
 extern crate rocket;
 mod data_types;
-use crate::data_types::Invitation;
-use data_types::{Media, Record, SourceMissive, Vessel};
+use crate::data_types::{Invitation, Vessels};
+use data_types::{JoiningVessel, Media, Record, SourceMissive, Vessel};
 use queues::{IsQueue, Queue};
 use rocket::{
   fs::NamedFile,
+  futures::{stream::SplitStream, SinkExt, StreamExt},
   response::{
     status,
     stream::{Event, EventStream},
   },
   serde::{json::Json, uuid::Uuid},
-  tokio::{self, select, sync::RwLock},
-  Shutdown, State,
+  tokio::{self, pin, select, sync::RwLock},
+  Config, Ignite, Rocket, Shutdown, State,
 };
 use std::{collections::HashMap, sync::Arc};
-
-const TIME_OUT: rocket::time::Duration = rocket::time::Duration::hours(1);
-type Vessels = Arc<CurrentVessels>;
-
-#[derive(Default)]
-struct CurrentVessels {
-  active_vessels: RwLock<HashMap<String, Arc<RwLock<Vessel>>>>,
-  joining_vessels: RwLock<HashMap<String, Arc<RwLock<Vessel>>>>,
-}
+use ws::stream::{DuplexStream, MessageStream};
 
 #[get("/")]
 async fn index() -> NamedFile {
-  NamedFile::open("static/index.html").await.unwrap()
+  NamedFile::open("STATIC/SOURCE_CONNECTOR.HTML")
+    .await
+    .unwrap()
 }
-
-#[get("/BACKGROUND")]
-async fn background() -> NamedFile {
-  NamedFile::open("static/wacky-lil-background.gif")
+#[get("/CHASSI")]
+async fn css() -> NamedFile {
+  NamedFile::open("STATIC/SOURCE_CONNECTOR.CSS")
     .await
     .unwrap()
 }
 
-#[get("/COMPUTER_ICON")]
-async fn computer_icon() -> NamedFile {
-  NamedFile::open("static/compoter.gif").await.unwrap()
+#[get("/STATUS/<i>")]
+async fn status_icon(i: usize) -> NamedFile {
+  NamedFile::open(format!("STATIC/STATUS/{i}.GIF"))
+    .await
+    .unwrap()
 }
 
-#[get("/THE_CODE")]
-async fn the_code() -> NamedFile {
+#[get("/SOURCE_CONNECTOR")]
+async fn source_connector() -> NamedFile {
   NamedFile::open("static/swag.js").await.unwrap()
 }
 
@@ -55,9 +51,7 @@ async fn request_invitation(
   let moniker_suggestion = if moniker_suggestion.is_ascii() {
     moniker_suggestion.trim().to_ascii_uppercase().to_owned()
   } else {
-    return Err(status::Unauthorized(Some(
-      "...but the name was too complex.",
-    )));
+    return Err(status::Unauthorized("...but the name was too complex."));
   };
   if moniker_suggestion == "KLOHGER"
     || vessels
@@ -66,9 +60,9 @@ async fn request_invitation(
       .await
       .contains_key(&moniker_suggestion)
   {
-    return Err(status::Unauthorized(Some(
+    return Err(status::Unauthorized(
       "...but THE SOURCE did not respond. Maybe someone wielding your moniker has already entered?",
-    )));
+    ));
   };
 
   let moniker = moniker_suggestion;
@@ -76,13 +70,12 @@ async fn request_invitation(
   let mut joining_vessels = vessels.joining_vessels.write().await;
   joining_vessels.insert(
     moniker.clone(),
-    Arc::new(RwLock::new(Vessel {
-      last_interaction: rocket::time::Instant::now(),
-      missives: Queue::new(),
+    Arc::new(JoiningVessel {
       password,
-    })),
+      started_joining: rocket::time::Instant::now(),
+    }),
   );
-  Ok(status::Accepted(Some(Json(Invitation {
+  Ok(status::Accepted(Json(Invitation {
     moniker,
     password,
     other_vessels: vessels
@@ -92,16 +85,18 @@ async fn request_invitation(
       .keys()
       .map(|moniker| moniker.clone())
       .collect(),
-  }))))
+  })))
 }
 
 #[get("/THE_SOURCE/ENTER/<moniker>/<password>")]
-fn enter<'a>(
+fn enter(
+  ws: ws::WebSocket,
   mut shutdown: Shutdown,
   moniker: String,
   password: Uuid,
-  vessels: &'a State<Vessels>,
-) -> EventStream![Event + 'a] {
+  vessels: &State<Vessels>,
+) -> ws::Channel<'static> {
+  /*
   async fn notify_vessel_entered(vessel: Arc<RwLock<Vessel>>, moniker: String) {
     vessel
       .write()
@@ -186,9 +181,45 @@ fn enter<'a>(
 
     println!("wowie");
   };
-
   println!("wowie");
-  stream
+  ws.channel(move |mut stream| {
+    Box::pin(async move {
+      while let Some(message) = stream.next().await {
+        let _ = stream.send(message?).await;
+      }
+
+      Ok(())
+    })
+  })
+  */
+  ws.channel(move |mut stream| {
+    Box::pin(async move {
+      let mut interval = tokio::time::interval(tokio::time::Duration::from_secs(1));
+      loop {
+        select! {
+          message = stream.next() => {
+            if let Some(message) = message {
+              match message {
+                Ok(message) => println!("Recieved message: {message}"),
+                Err(err) => println!("GOt an error: {err}"),
+              }
+            } else {
+              println!("lost connection i guess");
+              break;
+            }
+          },
+          _ = interval.tick() => {
+
+          },
+          _ = &mut shutdown => {
+            println!("wowie");
+            break;
+          }
+        }
+      }
+      Ok(())
+    })
+  })
 }
 
 #[get("/THE_SOURCE/SEND/MISSIVE/<moniker>/<password>/<recipient>/<missive>")]
@@ -202,24 +233,24 @@ async fn send_missive(
   let vessel = match vessels.active_vessels.read().await.get(&moniker) {
     Some(vessel) => vessel.clone(),
     None => {
-      return Err(status::Unauthorized(Some(
+      return Err(status::Unauthorized(
         "...but THE SOURCE did not recognize you.",
-      )))
+      ))
     }
   };
 
   if vessel.read().await.password != password {
-    return Err(status::Unauthorized(Some(
+    return Err(status::Unauthorized(
       "...but THE SOURCE did not recognize you.",
-    )));
+    ));
   }
 
   let recipient = match vessels.active_vessels.read().await.get(&recipient) {
     Some(recipient) => recipient.clone(),
     None => {
-      return Err(status::Unauthorized(Some(
+      return Err(status::Unauthorized(
         "...but THE SOURCE could not find the recipient.",
-      )))
+      ))
     }
   };
 
@@ -231,7 +262,7 @@ async fn send_missive(
       media: Media::Missive(missive),
     });
 
-  Ok(status::Accepted(Some(())))
+  Ok(status::Accepted(()))
 }
 
 #[get("/THE_SOURCE/SEND/RECORD/<moniker>/<password>/<recipient>/<file_name>/<data>")]
@@ -246,24 +277,24 @@ async fn send_record(
   let vessel = match vessels.active_vessels.read().await.get(&moniker) {
     Some(vessel) => vessel.clone(),
     None => {
-      return Err(status::Unauthorized(Some(
+      return Err(status::Unauthorized(
         "...but THE SOURCE did not recognize you.",
-      )))
+      ))
     }
   };
 
   if vessel.read().await.password != password {
-    return Err(status::Unauthorized(Some(
+    return Err(status::Unauthorized(
       "...but THE SOURCE did not recognize you.",
-    )));
+    ));
   }
 
   let recipient = match vessels.active_vessels.read().await.get(&recipient) {
     Some(recipient) => recipient.clone(),
     None => {
-      return Err(status::Unauthorized(Some(
+      return Err(status::Unauthorized(
         "...but THE SOURCE could not find the recipient.",
-      )))
+      ))
     }
   };
 
@@ -275,22 +306,42 @@ async fn send_record(
       media: Media::Record(Record { file_name, data }),
     });
 
-  Ok(status::Accepted(Some(())))
+  Ok(status::Accepted(()))
 }
 
-#[launch]
-fn rocket() -> _ {
-  rocket::build().manage(Vessels::default()).mount(
-    "/",
-    routes![
-      index,
-      the_code,
-      background,
-      computer_icon,
-      enter,
-      request_invitation,
-      send_record,
-      send_missive
-    ],
-  )
+#[rocket::main]
+async fn main() -> Result<(), rocket::Error> {
+  let vessels = Vessels::default();
+  let mut interval = rocket::tokio::time::interval(rocket::tokio::time::Duration::from_secs(5));
+  let rocket = rocket::build()
+    .manage(vessels.clone())
+    .mount(
+      "/",
+      routes![
+        index,
+        css,
+        source_connector,
+        status_icon,
+        enter,
+        request_invitation,
+        send_record,
+        send_missive
+      ],
+    )
+    .launch();
+  pin!(rocket);
+
+  loop {
+    select! {
+      _ = interval.tick() => {
+        println!("YOOO")
+      },
+      rocket = &mut rocket => {
+        rocket?;
+        break;
+      }
+    }
+  }
+
+  Ok(())
 }

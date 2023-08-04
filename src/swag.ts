@@ -4,6 +4,7 @@ namespace SOURCE_CONNECTOR {
       [
         "RECIEVE_MEDIA",
         (EVENT) => {
+          console.log(EVENT.data);
           const MISSIVE = JSON.parse(
             EVENT.data
           ) as SOURCE_MISSIVE.RECIEVE_MEDIA;
@@ -16,16 +17,19 @@ namespace SOURCE_CONNECTOR {
           const MISSIVE = JSON.parse(
             EVENT.data
           ) as SOURCE_MISSIVE.VESSEL_ENTERED;
-          THE_TABLE.appendChild(SHAPE_VESSEL_HTML_ELEMENT(MISSIVE.MONIKER));
           console.log(EVENT.type, MISSIVE);
+          THE_TABLE.appendChild(SHAPE_VESSEL_HTML_ELEMENT(MISSIVE.MONIKER));
+          
         },
       ],
       [
         "VESSEL_LEFT",
         (EVENT) => {
           const MISSIVE = JSON.parse(EVENT.data) as SOURCE_MISSIVE.VESSEL_LEFT;
-          document.getElementById(MISSIVE.MONIKER)?.remove();
           console.log(EVENT.type, MISSIVE);
+          document
+            .querySelector(`.VESSEL[moniker="${MISSIVE.MONIKER}"]`)
+            ?.remove();
         },
       ],
       [
@@ -38,7 +42,6 @@ namespace SOURCE_CONNECTOR {
           console.log(EVENT.type, MISSIVE);
           THE_SOURCE_CONNECTION.close();
           CONNECT_BUTTON.style.display = "block";
-
         },
       ],
       [
@@ -95,10 +98,10 @@ namespace SOURCE_CONNECTOR {
   }
 
   let THE_SOURCE_CONNECTION!: EventSource;
-  const CONNECT_BUTTON = document.getElementById(
-    "CONNECT_BUTTON"
-  ) as HTMLButtonElement;
-  const THE_TABLE = document.getElementById("THE_TABLE") as HTMLTableElement;
+  const CONNECT_BUTTON = <HTMLButtonElement>(
+    document.querySelector("#CONNECT_BUTTON")
+  );
+  const THE_TABLE = <HTMLTableElement>document.querySelector("#THE_TABLE");
   let THE_SELF: VESSEL;
   async function RECIEVE_INVITATION() {
     let DETAILS!: INVITATION;
@@ -201,56 +204,48 @@ namespace SOURCE_CONNECTOR {
     return { MONIKER: DETAILS.MONIKER, PASSWORD: DETAILS.PASSWORD };
   }
 
-  function SHAPE_VESSEL_HTML_ELEMENT(VESSEL: string) {
-    let table = document.createElement("table");
-    table.innerHTML = `
+  function SHAPE_VESSEL_HTML_ELEMENT(MONIKER: string) {
+    console.log(MONIKER);
+    let TABLE = document.createElement("table");
+    TABLE.innerHTML = `
     <tbody>
-      <tr id="${VESSEL}" style="padding: 0; margin: 0;">
-        <td 
-          class="STATUS" 
-          style="
-          border-top:0.25rem inset white; 
-          border-left:0.25rem inset white;
-          border-bottom:0.25rem inset white;
-          padding: 0; margin: 0;"
-        >
-          <img 
-            style="margin: 0; padding: 0; border:white outset 0.25rem;"
-            src="COMPUTER_ICON"
-          >
+      <tr class="VESSEL" moniker="${MONIKER}">
+        <td class="STATUS OUT">
+          <div class="IN"></div>
         </td>
-        <td class="NAME" style="
-        border-bottom:0.25rem inset white;
-        border-top:0.25rem inset white; padding: 0; margin: 0;">
-          <p style="margin: 0; padding: 0; border:white outset 0.25rem;">${VESSEL}</p>
+        <td class="NAME OUT">
+          <div class="CENTERER">
+            <div>${MONIKER}</div>
+          </div>
         </td>
-        <td class="SEND_MISSIVE" style="
-        border-bottom:0.25rem inset white; 
-        border-top:0.25rem inset white; padding: 0; margin: 0;">
-          <form style="border:white outset 0.25rem; padding: 0; margin: 0; ">
-            <label for="${VESSEL}_MISSIVE_INPUT" style="padding: 0; margin: 0;">INPUT MISSIVE:
-            </label>
-            <input id="${VESSEL}_MISSIVE_INPUT" type="text"
-              style="border:white inset 0.25rem; padding: 0; padding-inline: 0; margin: 0;"><input type="submit"
-              value="SUBMIT" style="border:white outset 0.25rem; padding: 0; padding-inline: 0; margin: 0;">
-          </form>
-        </td>
-        <td class="SEND_RECORD" style="
-        border-bottom:0.25rem inset white; 
-        border-top:0.25rem inset white; border-right:0.25rem inset white; padding: 0; margin: 0;">
-          <form style="border:white outset 0.25rem; padding: 0; margin: 0;">
-            <label for="${VESSEL}_RECORD_INPUT" style="padding: 0; margin: 0;">INPUT RECORD:
-            </label>
-            <input id="${VESSEL}_RECORD_INPUT" type="file"
-              style="border:white outset 0.25rem; padding: 0; margin: 0;"><input type="submit" value="SUBMIT">
-          </form>
+        <td class="MISSIVE_INPUT OUT CENTERER" style="display: inline-flex;">
+          <input class="IN H2" type="text" placeholder="SEND MISSIVE...">
+          <div class="BUTTON CENTERER">SEND</div>
+        </td><td class="RECORD_INPUT OUT" style="display: inline-flex;">
+          <div class="BUTTON CENTERER">SEND RECORD</div>
+          <input type="file" value="HAHA">
         </td>
       </tr>
     </tbody>`.trim();
-    let vessel = table.firstElementChild
-      ?.firstElementChild as HTMLTableRowElement;
+    let VESSEL = <HTMLTableRowElement>(
+      TABLE.firstElementChild?.firstElementChild
+    );
+    VESSEL.querySelector(".MISSIVE_INPUT > .BUTTON")?.addEventListener(
+      "click",
+      (ev) => {
+        ev.preventDefault();
+        let MISSIVE = (<HTMLInputElement>(
+          VESSEL.querySelector('.MISSIVE_INPUT > input[type="text"]')
+        )).value.trim();
+        if (MISSIVE !== "") {
+          SEND_MISSIVE_TO(MONIKER, MISSIVE.toUpperCase()).catch((reason) =>
+            alert(`Failed to send missive to ${MONIKER} Reason:"${reason}"`)
+          );
+        }
+      }
+    );
 
-    return vessel;
+    return VESSEL;
   }
 
   CONNECT_BUTTON.addEventListener("click", async (ev) => {
@@ -258,17 +253,5 @@ namespace SOURCE_CONNECTOR {
     THE_SELF = PROCESS_INVITATION(await RECIEVE_INVITATION());
     THE_SOURCE_CONNECTION = CONNECT_TO_SOURCE();
     CONNECT_BUTTON.style.display = "none";
-  });
-  CONNECT_BUTTON.addEventListener("mousedown", (ev) => {
-    ev.preventDefault();
-    CONNECT_BUTTON.style.border = "white inset 0.25rem";
-  });
-  CONNECT_BUTTON.addEventListener("mouseenter", (ev) => {
-    ev.preventDefault();
-    CONNECT_BUTTON.style.background = "lightgray";
-  });
-  CONNECT_BUTTON.addEventListener("mouseleave", (ev) => {
-    ev.preventDefault();
-    CONNECT_BUTTON.style.background = "rgb(230, 230, 230)";
   });
 }
