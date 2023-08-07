@@ -94,7 +94,13 @@ namespace SOURCE_CONNECTOR {
     SOURCE_CONNECTION.onopen = (_) => {
       SEND_VESSEL_MISSIVE({
         TYPE: "REQUEST_INVITATION",
-        SUGGESTED_USERNAME: "GamerJoe",
+        SUGGESTED_USERNAME: (() => {
+          let sugg: string | null;
+          do {
+            sugg = prompt("yooo");
+          } while (sugg === null);
+          return sugg;
+        })(),
       });
     };
     SOURCE_CONNECTION.onmessage = async (ev) => {
@@ -121,10 +127,53 @@ namespace SOURCE_CONNECTOR {
     */
       switch (MISSIVE.TYPE) {
         case "INVALID_CREDENTIALS":
-          ((x: never) => x)(MISSIVE);
+          SEND_VESSEL_MISSIVE({
+            TYPE: "REQUEST_INVITATION",
+            SUGGESTED_USERNAME: (() => {
+              let sugg: string | null;
+              do {
+                sugg = prompt("yooo");
+              } while (sugg === null);
+              return sugg;
+            })(),
+          });
           break;
         case "INVITATION_REQUEST_RESPONSE":
-          ((x: never) => x)(MISSIVE);
+          switch (MISSIVE.RESPONSE.TYPE) {
+            case "INVITATION":
+              MISSIVE.RESPONSE.OTHER_VESSELS.forEach((v) =>
+                THE_TABLE.appendChild(SHAPE_VESSEL_HTML_ELEMENT(v))
+              );
+              THE_SELF = {
+                MONIKER: MISSIVE.RESPONSE.MONIKER,
+                PASSWORD: MISSIVE.RESPONSE.PASSWORD,
+              };
+              break;
+            case "MONIKER_TAKEN":
+              SEND_VESSEL_MISSIVE({
+                TYPE: "REQUEST_INVITATION",
+                SUGGESTED_USERNAME: (() => {
+                  let sugg: string | null;
+                  do {
+                    sugg = prompt("yooo");
+                  } while (sugg === null);
+                  return sugg;
+                })(),
+              });
+              break;
+            case "TOO_COMPLEX":
+              SEND_VESSEL_MISSIVE({
+                TYPE: "REQUEST_INVITATION",
+                SUGGESTED_USERNAME: (() => {
+                  let sugg: string | null;
+                  do {
+                    sugg = prompt("yooo");
+                  } while (sugg === null);
+                  return sugg;
+                })(),
+              });
+              break;
+          }
           break;
         case "RECIEVE_MEDIA":
           ((x: never) => x)(MISSIVE);
@@ -141,14 +190,6 @@ namespace SOURCE_CONNECTOR {
           ((x: never) => x)(MISSIVE);
       }
     };
-  }
-  function PROCESS_INVITATION(
-    DETAILS: SOURCE_MISSIVE.INVITATION_REQUEST_RESPONSE.INVITATION
-  ): VESSEL {
-    DETAILS.OTHER_VESSELS.forEach((v) =>
-      THE_TABLE.appendChild(SHAPE_VESSEL_HTML_ELEMENT(v))
-    );
-    return { MONIKER: DETAILS.MONIKER, PASSWORD: DETAILS.PASSWORD };
   }
 
   function SHAPE_VESSEL_HTML_ELEMENT(MONIKER: string) {

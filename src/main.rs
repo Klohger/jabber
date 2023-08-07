@@ -11,7 +11,7 @@ use rocket::{
 };
 use ws::Message;
 
-use crate::data_types::{JoiningVessel, VesselMissive};
+use crate::data_types::{JoiningVessel, VesselMissive, Please};
 
 #[get("/")]
 async fn index() -> NamedFile {
@@ -32,14 +32,6 @@ async fn source_connector() -> NamedFile {
   NamedFile::open("static/swag.js").await.unwrap()
 }
 /*
-#[get("/THE_SOURCE/REQUEST_INVITATION/<moniker_suggestion>")]
-async fn request_invitation(
-  moniker_suggestion: &str,
-  vessels: &State<Vessels>,
-) -> Result<status::Accepted<Json<Invitation>>, status::Unauthorized<&'static str>> {
-
-}
-*/
 #[get("/THE_SOURCE/<moniker>/<password>")]
 fn the_source<'a>(ws: ws::WebSocket, mut shutdown: Shutdown, moniker: String, password: Uuid, vessels: &'a State<Vessels>) -> ws::Channel<'a> {
   /*
@@ -141,7 +133,7 @@ fn the_source<'a>(ws: ws::WebSocket, mut shutdown: Shutdown, moniker: String, pa
     })
   })
   */
-  /* */
+
   ws.channel(move |mut stream| {
     Box::pin(async move {
       let mut interval = tokio::time::interval(tokio::time::Duration::from_secs(1));
@@ -212,12 +204,11 @@ fn the_source<'a>(ws: ws::WebSocket, mut shutdown: Shutdown, moniker: String, pa
                               .await.unwrap();
                             //return Err(status::Unauthorized("...but the name was too complex."));
                           }
-
-
                         },
-
-
-                        VesselMissive::SendMedia { recipient, media } => todo!(),
+                        VesselMissive::SendMedia { recipient, media } => { let active_vessels = vessels.active_vessels.read().await; if active_vessels.contains_key(&recipient) {
+                            active_vessels.get_mut(&recipient).
+                          }
+                        }
                     },
                     Message::Close(_) => println!("CLOSE CLOSE CLOSE"),
                     whuj => panic!("{whuj:?}")
@@ -256,7 +247,8 @@ fn the_source<'a>(ws: ws::WebSocket, mut shutdown: Shutdown, moniker: String, pa
     })
   })
 }
-/*/
+*/
+/*
 #[get("/THE_SOURCE/SEND/MISSIVE/<moniker>/<password>/<recipient>/<missive>")]
 async fn send_missive(
   moniker: String,
@@ -343,16 +335,17 @@ async fn send_record(
   Ok(status::Accepted(()))
 }
 */
+
 #[rocket::main]
 async fn main() -> Result<(), rocket::Error> {
   let vessels = Vessels::default();
+  let please = Please::default();
   let mut interval = rocket::tokio::time::interval(JOIN_TIME_OUT * 2);
-  let rocket = rocket::build()
-    .manage(vessels.clone())
-    .mount("/", routes![index, css, source_connector, status_icon, the_source,])
-    .launch();
+  let rocket = rocket::build().manage(please).mount("/", routes![index, css, source_connector, status_icon, the_source,]).launch();
+  
   pin!(rocket);
-
+  
+  /*
   loop {
     select! {
       _ = interval.tick() => {
@@ -366,6 +359,7 @@ async fn main() -> Result<(), rocket::Error> {
       }
     }
   }
+  */
 
   Ok(())
 }

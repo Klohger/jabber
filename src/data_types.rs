@@ -5,6 +5,7 @@ use rocket::{
   serde::{self, uuid::Uuid},
   tokio::sync::RwLock,
 };
+use ws::stream::DuplexStream;
 
 #[derive(serde::Deserialize, serde::Serialize, Clone)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
@@ -28,20 +29,18 @@ pub enum InvitationRequestResponse {
     password: Uuid,
     #[serde(rename = "OTHER_VESSELS")]
     other_vessels: Vec<String>,
-  }
+  },
 }
-
-
-pub enum 
 
 #[derive(serde::Serialize, Clone)]
 #[serde(tag = "TYPE")]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 #[serde(crate = "rocket::serde")]
 pub enum SourceMissive {
-  InvitationRequestResponse{
-    response : InvitationRequestResponse,
+  InvitationRequestResponse {
+    response: InvitationRequestResponse,
   },
+  InvalidCredentials,
   RecieveMedia {
     #[serde(rename = "MONIKER")]
     moniker: String,
@@ -57,7 +56,6 @@ pub enum SourceMissive {
     moniker: String,
     reason: LeaveReason,
   },
-  InvalidCredentials
 }
 #[derive(serde::Deserialize, serde::Serialize, Clone)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
@@ -91,8 +89,10 @@ pub enum Media {
   Missive(String),
   Record(Record),
 }
+pub type Please = Option<Arc<RwLock<DuplexStream>>>;
 pub struct Vessel {
   pub last_interaction: rocket::time::Instant,
+  pub stream : Option<Arc<RwLock<DuplexStream>>>,
   pub password: Uuid,
 }
 pub struct JoiningVessel {
