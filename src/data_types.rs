@@ -15,9 +15,33 @@ pub struct Record {
 }
 
 #[derive(serde::Serialize, Clone)]
-#[serde(untagged)]
+#[serde(tag = "TYPE")]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+#[serde(crate = "rocket::serde")]
+pub enum InvitationRequestResponse {
+  TooComplex,
+  MonikerTaken,
+  Invitation {
+    #[serde(rename = "MONIKER")]
+    moniker: String,
+    #[serde(rename = "PASSWORD")]
+    password: Uuid,
+    #[serde(rename = "OTHER_VESSELS")]
+    other_vessels: Vec<String>,
+  }
+}
+
+
+pub enum 
+
+#[derive(serde::Serialize, Clone)]
+#[serde(tag = "TYPE")]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 #[serde(crate = "rocket::serde")]
 pub enum SourceMissive {
+  InvitationRequestResponse{
+    response : InvitationRequestResponse,
+  },
   RecieveMedia {
     #[serde(rename = "MONIKER")]
     moniker: String,
@@ -31,9 +55,32 @@ pub enum SourceMissive {
   VesselLeft {
     #[serde(rename = "MONIKER")]
     moniker: String,
+    reason: LeaveReason,
   },
-  ForcefulLeave(String),
-  Unworthy(String),
+  InvalidCredentials
+}
+#[derive(serde::Deserialize, serde::Serialize, Clone)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+#[serde(crate = "rocket::serde")]
+pub enum LeaveReason {
+  SourceShutDown,
+  AFK,
+}
+#[derive(serde::Deserialize, Clone)]
+#[serde(tag = "TYPE")]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+#[serde(crate = "rocket::serde")]
+pub enum VesselMissive {
+  RequestInvitation {
+    #[serde(rename = "SUGGESTED_USERNAME")]
+    suggested_username: String,
+  },
+  SendMedia {
+    #[serde(rename = "RECIPIENT")]
+    recipient: String,
+    #[serde(rename = "MEDIA")]
+    media: Media,
+  },
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone)]
@@ -44,27 +91,12 @@ pub enum Media {
   Missive(String),
   Record(Record),
 }
-
-#[derive(serde::Serialize)]
-#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
-#[serde(crate = "rocket::serde")]
-pub struct Invitation {
-  pub moniker: String,
-  pub password: Uuid,
-  pub other_vessels: Vec<String>,
-}
 pub struct Vessel {
   pub last_interaction: rocket::time::Instant,
-  pub missives: Queue<SourceMissive>,
   pub password: Uuid,
 }
-impl Vessel {
-  pub fn add_missive(&mut self, missive: SourceMissive) {
-    self.missives.add(missive).unwrap();
-  }
-}
 pub struct JoiningVessel {
-  pub started_joining: rocket::time::Instant,
+  pub started_joining: std::time::Instant,
   pub password: Uuid,
 }
 
@@ -73,11 +105,11 @@ pub type Vessels = Arc<CurrentVessels>;
 #[derive(Default)]
 pub struct CurrentVessels {
   pub active_vessels: RwLock<HashMap<String, Arc<RwLock<Vessel>>>>,
-  pub joining_vessels: RwLock<HashMap<String, Arc<JoiningVessel>>>,
+  pub joining_vessels: RwLock<HashMap<String, JoiningVessel>>,
 }
 
 pub const TIME_OUT: rocket::time::Duration = rocket::time::Duration::hours(24);
-pub const JOIN_TIME_OUT: rocket::time::Duration = rocket::time::Duration::seconds(60);
+pub const JOIN_TIME_OUT: std::time::Duration = std::time::Duration::from_secs(60);
 /*
 pub struct EventStreamProtector<S>(EventStream<S>);
 

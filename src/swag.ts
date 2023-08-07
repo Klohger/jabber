@@ -1,85 +1,64 @@
 namespace SOURCE_CONNECTOR {
   namespace SOURCE_MISSIVE {
-    export const events: [string, (EVENT: MessageEvent<string>) => void][] = [
-      [
-        "RECIEVE_MEDIA",
-        (EVENT) => {
-          console.log(EVENT.data);
-          const MISSIVE = JSON.parse(
-            EVENT.data
-          ) as SOURCE_MISSIVE.RECIEVE_MEDIA;
-          console.log(EVENT.type, MISSIVE);
-        },
-      ],
-      [
-        "VESSEL_ENTERED",
-        (EVENT) => {
-          const MISSIVE = JSON.parse(
-            EVENT.data
-          ) as SOURCE_MISSIVE.VESSEL_ENTERED;
-          console.log(EVENT.type, MISSIVE);
-          THE_TABLE.appendChild(SHAPE_VESSEL_HTML_ELEMENT(MISSIVE.MONIKER));
-          
-        },
-      ],
-      [
-        "VESSEL_LEFT",
-        (EVENT) => {
-          const MISSIVE = JSON.parse(EVENT.data) as SOURCE_MISSIVE.VESSEL_LEFT;
-          console.log(EVENT.type, MISSIVE);
-          document
-            .querySelector(`.VESSEL[moniker="${MISSIVE.MONIKER}"]`)
-            ?.remove();
-        },
-      ],
-      [
-        "FORCEFUL_LEAVE",
-        (EVENT) => {
-          const MISSIVE = JSON.parse(
-            EVENT.data
-          ) as SOURCE_MISSIVE.FORCEFUL_LEAVE;
-          THE_TABLE.innerHTML = "";
-          console.log(EVENT.type, MISSIVE);
-          THE_SOURCE_CONNECTION.close();
-          CONNECT_BUTTON.style.display = "block";
-        },
-      ],
-      [
-        "UNWORTHY",
-        (EVENT) => {
-          const MISSIVE = JSON.parse(EVENT.data) as SOURCE_MISSIVE.UNWORTHY;
-          console.log(EVENT.type, MISSIVE);
-          THE_SOURCE_CONNECTION.close();
-        },
-      ],
-    ];
+    export namespace INVITATION_REQUEST_RESPONSE {
+      export type TOO_COMPLEX = { TYPE: "TOO_COMPLEX" };
+      export type MONIKER_TAKEN = { TYPE: "MONIKER_TAKEN" };
+      export type INVITATION = VESSEL & {
+        TYPE: "INVITATION";
+        OTHER_VESSELS: string[];
+      };
+    }
+    export type INVITATION_REQUEST_RESPONSE = {
+      TYPE: "INVITATION_REQUEST_RESPONSE";
+      RESPONSE:
+        | INVITATION_REQUEST_RESPONSE.INVITATION
+        | INVITATION_REQUEST_RESPONSE.MONIKER_TAKEN
+        | INVITATION_REQUEST_RESPONSE.TOO_COMPLEX;
+    };
     export type RECIEVE_MEDIA = {
+      TYPE: "RECIEVE_MEDIA";
       MONIKER: string;
       MEDIA: MEDIA;
     };
     export type VESSEL_ENTERED = {
+      TYPE: "VESSEL_ENTERED";
       MONIKER: string;
     };
+    export namespace VESSEL_LEFT {
+      export type LEAVE_REASON = "SOURCE_SHUT_DOWN" | "AFK";
+    }
     export type VESSEL_LEFT = {
-      MONIKER: string;
+      TYPE: "VESSEL_LEFT";
+      MONIKER: VESSEL_LEFT.LEAVE_REASON;
     };
-    export type FORCEFUL_LEAVE = string;
-    export type UNWORTHY = string;
+    export type INVALID_CREDENTIALS = {
+      TYPE: "INVALID_CREDENTIALS";
+    };
   }
+
   type SOURCE_MISSIVE =
+    | SOURCE_MISSIVE.INVITATION_REQUEST_RESPONSE
     | SOURCE_MISSIVE.RECIEVE_MEDIA
     | SOURCE_MISSIVE.VESSEL_ENTERED
     | SOURCE_MISSIVE.VESSEL_LEFT
-    | SOURCE_MISSIVE.FORCEFUL_LEAVE
-    | SOURCE_MISSIVE.UNWORTHY;
-
+    | SOURCE_MISSIVE.INVALID_CREDENTIALS;
+  namespace VESSEL_MISSIVE {
+    export type REQUEST_INVITATION = {
+      TYPE: "REQUEST_INVITATION";
+      SUGGESTED_USERNAME: string;
+    };
+    export type SEND_MEDIA = {
+      TYPE: "SEND_MEDIA";
+      RECIPIENT: string;
+      MEDIA: MEDIA;
+    };
+  }
+  type VESSEL_MISSIVE =
+    | VESSEL_MISSIVE.REQUEST_INVITATION
+    | VESSEL_MISSIVE.SEND_MEDIA;
   type VESSEL = {
     MONIKER: string;
     PASSWORD: string;
-  };
-
-  type INVITATION = VESSEL & {
-    OTHER_VESSELS: string[];
   };
   type RECORD = {
     TYPE: "RECORD";
@@ -97,107 +76,75 @@ namespace SOURCE_CONNECTOR {
     UNAUTHORIZED = 401,
   }
 
-  let THE_SOURCE_CONNECTION!: EventSource;
+  let SOURCE_CONNECTION!: WebSocket;
   const CONNECT_BUTTON = <HTMLButtonElement>(
     document.querySelector("#CONNECT_BUTTON")
   );
   const THE_TABLE = <HTMLTableElement>document.querySelector("#THE_TABLE");
   let THE_SELF: VESSEL;
-  async function RECIEVE_INVITATION() {
-    let DETAILS!: INVITATION;
-    {
-      let ERROR_MESSAGE: null | string = null;
-      let MONIKER_SUGGESTION: string | null;
-      let PROMISE!: Promise<INVITATION>;
-      do {
-        MONIKER_SUGGESTION = prompt(
-          ERROR_MESSAGE === null
-            ? "Choose a MONIKER to wield for THE SOURCE."
-            : ERROR_MESSAGE
-        );
-        if (MONIKER_SUGGESTION === null) continue;
-        PROMISE = REQUEST_INVITATION({
-          MONIKER_SUGGESTION: MONIKER_SUGGESTION,
-        });
-      } while (
-        await PROMISE.then(
-          (RES) => {
-            DETAILS = RES;
-            return false;
-          },
-          (ERR: string) => {
-            ERROR_MESSAGE = ERR;
-            return true;
-          }
-        )
-      );
-    }
-    return DETAILS;
+  function SEND_VESSEL_MISSIVE(MISSIVE: VESSEL_MISSIVE) {
+    SOURCE_CONNECTION.send(JSON.stringify(MISSIVE));
   }
+  const WEB_SOCKET_SUFFIX: string =
+    window.location.protocol.replace("http", "ws") + window.location.host;
   function CONNECT_TO_SOURCE() {
-    let THE_SOURCE = new EventSource(
-      `THE_SOURCE/ENTER/${THE_SELF.MONIKER}/${THE_SELF.PASSWORD}`
+    SOURCE_CONNECTION = new WebSocket(
+      `${WEB_SOCKET_SUFFIX}/THE_SOURCE/ENTER/${THE_SELF.MONIKER}/${THE_SELF.PASSWORD}`
     );
-
-    THE_SOURCE.onopen = (_) => {
-      console.log("entered THE SOURCE");
+    SOURCE_CONNECTION.onopen = (_) => {
+      SEND_VESSEL_MISSIVE({
+        TYPE: "REQUEST_INVITATION",
+        SUGGESTED_USERNAME: "GamerJoe",
+      });
     };
-    SOURCE_MISSIVE.events.forEach(([type, event]) => {
-      console.log(type);
-      THE_SOURCE.addEventListener(type, event);
-    });
-    return THE_SOURCE;
-  }
-  function REQUEST_INVITATION(args: { MONIKER_SUGGESTION: string }) {
-    return fetch(
-      `THE_SOURCE/REQUEST_INVITATION/${args.MONIKER_SUGGESTION}`
-    ).then(
-      async (response) => {
-        switch (response.status) {
-          case STATUS.ACCEPTED:
-            let details = (await response.json()) as INVITATION;
-            return details;
-        }
-        throw await response.text();
+    SOURCE_CONNECTION.onmessage = async (ev) => {
+      const MISSIVE: SOURCE_MISSIVE = JSON.parse(ev.data);
+      console.log("Recieved:", MISSIVE);
+      /*
+    type Map<K extends string | number | symbol, T> = Record<K, T>;
+
+    export const MISSIVE_HANDLERS: Map<
+      string,
+      (SOURCE_MISSIVE: SOURCE_MISSIVE) => void
+    > = {
+      RECIEVE_MEDIA: (SOURCE_MISSIVE) => {
+        const MISSIVE = SOURCE_MISSIVE as SOURCE_MISSIVE.RECIEVE_MEDIA;
       },
-      (err) => {
-        throw err;
-      }
-    );
-  }
-  function SEND_MISSIVE_TO(RECIPIENT: string, MISSIVE: string) {
-    return fetch(
-      `THE_SOURCE/SEND/MISSIVE/${THE_SELF.MONIKER}/${THE_SELF.PASSWORD}/${RECIPIENT}/${MISSIVE}`
-    ).then(
-      async (response) => {
-        switch (response.status) {
-          case STATUS.ACCEPTED:
-            return;
-        }
-        throw await response.text();
+
+      FORCEFUL_LEAVE: (SOURCE_MISSIVE) => {
+        const MISSIVE = SOURCE_MISSIVE as SOURCE_MISSIVE.FORCEFUL_LEAVE;
+        THE_TABLE.innerHTML = "";
+        SOURCE_CONNECTION.close();
+        CONNECT_BUTTON.style.display = "block";
       },
-      (err) => {
-        throw err;
+    };
+    */
+      switch (MISSIVE.TYPE) {
+        case "INVALID_CREDENTIALS":
+          ((x: never) => x)(MISSIVE);
+          break;
+        case "INVITATION_REQUEST_RESPONSE":
+          ((x: never) => x)(MISSIVE);
+          break;
+        case "RECIEVE_MEDIA":
+          ((x: never) => x)(MISSIVE);
+          break;
+        case "VESSEL_ENTERED":
+          THE_TABLE.appendChild(SHAPE_VESSEL_HTML_ELEMENT(MISSIVE.MONIKER));
+          break;
+        case "VESSEL_LEFT":
+          document
+            .querySelector(`.VESSEL[moniker="${MISSIVE.MONIKER}"]`)
+            ?.remove();
+          break;
+        default:
+          ((x: never) => x)(MISSIVE);
       }
-    );
+    };
   }
-  function SEND_RECORD_TO(RECIPIENT: string, RECORD: RECORD) {
-    return fetch(
-      `THE_SOURCE/SEND/MISSIVE/${THE_SELF.MONIKER}/${THE_SELF.PASSWORD}/${RECIPIENT}/${RECORD.FILENAME}/${RECORD.DATA}`
-    ).then(
-      async (RESPONSE) => {
-        switch (RESPONSE.status) {
-          case STATUS.ACCEPTED:
-            return;
-        }
-        throw await RESPONSE.text();
-      },
-      (ERR) => {
-        throw ERR;
-      }
-    );
-  }
-  function PROCESS_INVITATION(DETAILS: INVITATION): VESSEL {
+  function PROCESS_INVITATION(
+    DETAILS: SOURCE_MISSIVE.INVITATION_REQUEST_RESPONSE.INVITATION
+  ): VESSEL {
     DETAILS.OTHER_VESSELS.forEach((v) =>
       THE_TABLE.appendChild(SHAPE_VESSEL_HTML_ELEMENT(v))
     );
@@ -238,9 +185,11 @@ namespace SOURCE_CONNECTOR {
           VESSEL.querySelector('.MISSIVE_INPUT > input[type="text"]')
         )).value.trim();
         if (MISSIVE !== "") {
-          SEND_MISSIVE_TO(MONIKER, MISSIVE.toUpperCase()).catch((reason) =>
-            alert(`Failed to send missive to ${MONIKER} Reason:"${reason}"`)
-          );
+          SEND_VESSEL_MISSIVE({
+            TYPE: "SEND_MEDIA",
+            RECIPIENT: MONIKER,
+            MEDIA: { TYPE: "MISSIVE", TEXT: MISSIVE.toUpperCase() },
+          });
         }
       }
     );
@@ -250,8 +199,7 @@ namespace SOURCE_CONNECTOR {
 
   CONNECT_BUTTON.addEventListener("click", async (ev) => {
     ev.preventDefault();
-    THE_SELF = PROCESS_INVITATION(await RECIEVE_INVITATION());
-    THE_SOURCE_CONNECTION = CONNECT_TO_SOURCE();
+    CONNECT_TO_SOURCE();
     CONNECT_BUTTON.style.display = "none";
   });
 }
