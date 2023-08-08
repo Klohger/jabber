@@ -258,26 +258,8 @@ namespace SOURCE_CONNECTOR {
   function SHAPE_VESSEL_HTML_ELEMENT(MONIKER: string) {
     console.log(MONIKER);
     let TABLE = document.createElement("table");
-    TABLE.innerHTML = `
-    <tbody>
-      <tr class="VESSEL" moniker="${MONIKER}">
-        <td class="STATUS OUT">
-          <div class="IN DEFAULT_0"></div>
-        </td>
-        <td class="NAME OUT">
-          <div class="CENTERER">
-            <div>${MONIKER}</div>
-          </div>
-        </td>
-        <td class="MISSIVE_INPUT OUT CENTERER" style="display: inline-flex;">
-          <input class="IN H2" type="text" placeholder="SEND MISSIVE...">
-          <div class="BUTTON CENTERER">SEND</div>
-        </td><td class="RECORD_INPUT OUT" style="display: inline-flex;">
-          <div class="BUTTON CENTERER">SEND RECORD</div>
-          <input type="file" value="HAHA">
-        </td>
-      </tr>
-    </tbody>`.trim();
+    TABLE.innerHTML =
+      `<tbody><tr class="VESSEL" moniker="${MONIKER}"><td class="STATUS OUT"><div class="IN DEFAULT_0"></div></td><td class="NAME OUT"><div class="CENTERER"><div>${MONIKER}</div></div></td><td class="MISSIVE_INPUT OUT CENTERER" style="display:inline-flex;"><input class="IN H2" type="text" placeholder="SEND MISSIVE..."><div class="BUTTON CENTERER">SEND</div></td><td class="RECORD_INPUT OUT" style="display:inline-flex;"><div class="BUTTON CENTERER">SEND RECORD</div><input type="file"></td></tr></tbody>`.trim();
     let VESSEL = <HTMLTableRowElement>(
       (TABLE.firstElementChild as Element).firstElementChild
     );
