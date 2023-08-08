@@ -11,3 +11,4 @@ ws = { package = "rocket_ws", git = "https://github.com/SergioBenitez/Rocket/", 
 uuid = { version = "1.4.1", features = ["v4", "fast-rng"] }
 tokio-stream = { version = "0.1.14", features = ["sync"] }
 serde_with = "3.2.0"
+

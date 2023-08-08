@@ -195,5 +195,5 @@ fn the_source<'a>(ws: ws::WebSocket, mut shutdown: Shutdown, vessels: &'a State<
 
 #[rocket::launch]
 async fn launch() -> _ {
-  rocket::custom(rocket::Config { port: 80, ..Default::default() }).manage(Vessels::default()).mount("/", routes![index, css, source_connector, status_icon, the_source])
+  rocket::custom(rocket::Config { port: 3000, ..Default::default() }).manage(Vessels::default()).mount("/", routes![index, css, source_connector, status_icon, the_source])
 }
