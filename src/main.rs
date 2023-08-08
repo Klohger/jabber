@@ -20,22 +20,22 @@ use crate::data_types::{LeaveReason, Vessel, VesselMissive, TIME_OUT};
 
 #[get("/")]
 async fn index() -> content::RawHtml<NamedFile> {
-  content::RawHtml(NamedFile::open("STATIC/SOURCE_CONNECTOR.HTML").await.unwrap())
+  content::RawHtml(NamedFile::open("./STATIC/SOURCE_CONNECTOR.HTML").await.unwrap())
 }
 #[get("/CHASSI")]
 async fn css() -> content::RawCss<NamedFile> {
-  content::RawCss(NamedFile::open("STATIC/SOURCE_CONNECTOR.CSS").await.unwrap())
+  content::RawCss(NamedFile::open("./STATIC/SOURCE_CONNECTOR.CSS").await.unwrap())
 }
 
 #[get("/STATUS/<i>")]
 async fn status_icon(i: usize) -> NamedFile {
   
-  NamedFile::open(format!("STATIC/STATUS/{i}.GIF")).await.unwrap()
+  NamedFile::open(format!("./STATIC/STATUS/{i}.GIF")).await.unwrap()
 }
 
 #[get("/SOURCE_CONNECTOR")]
 async fn source_connector() -> content::RawJavaScript<NamedFile> {
-  content::RawJavaScript(NamedFile::open("static/swag.js").await.unwrap())
+  content::RawJavaScript(NamedFile::open("./STATIC/SWAG.JS").await.unwrap())
 }
 
 #[get("/THE_SOURCE")]
