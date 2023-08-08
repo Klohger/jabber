@@ -150,17 +150,8 @@ fn the_source<'a>(ws: ws::WebSocket, mut shutdown: Shutdown, vessels: &'a State<
                   }
                 },
                 Err(err) => match err {
-                    ws::result::Error::ConnectionClosed => todo!(),
-                    ws::result::Error::AlreadyClosed => todo!(),
-                    ws::result::Error::Io(_) => todo!(),
-                    ws::result::Error::Tls(_) => todo!(),
-                    ws::result::Error::Capacity(_) => todo!(),
-                    ws::result::Error::Protocol(_) => todo!(),
-                    ws::result::Error::SendQueueFull(_) => todo!(),
-                    ws::result::Error::Utf8 => todo!(),
-                    ws::result::Error::Url(_) => todo!(),
-                    ws::result::Error::Http(_) => todo!(),
-                    ws::result::Error::HttpFormat(_) => todo!(),
+                    ws::result::Error::ConnectionClosed => eprintln!("huh"),
+                    err => panic!("{err}")
                 },
               }
             }
