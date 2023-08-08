@@ -11,7 +11,7 @@ use rocket::{
     self, select,
     sync::{mpsc::channel, RwLock},
   },
-  Shutdown, State,
+  Shutdown, State, response::content,
 };
 use std::sync::Arc;
 use ws::Message;
@@ -19,22 +19,23 @@ use ws::Message;
 use crate::data_types::{LeaveReason, Vessel, VesselMissive, TIME_OUT};
 
 #[get("/")]
-async fn index() -> NamedFile {
-  NamedFile::open("STATIC/SOURCE_CONNECTOR.HTML").await.unwrap()
+async fn index() -> content::RawHtml<NamedFile> {
+  content::RawHtml(NamedFile::open("STATIC/SOURCE_CONNECTOR.HTML").await.unwrap())
 }
 #[get("/CHASSI")]
-async fn css() -> NamedFile {
-  NamedFile::open("STATIC/SOURCE_CONNECTOR.CSS").await.unwrap()
+async fn css() -> content::RawCss<NamedFile> {
+  content::RawCss(NamedFile::open("STATIC/SOURCE_CONNECTOR.CSS").await.unwrap())
 }
 
 #[get("/STATUS/<i>")]
 async fn status_icon(i: usize) -> NamedFile {
+  
   NamedFile::open(format!("STATIC/STATUS/{i}.GIF")).await.unwrap()
 }
 
 #[get("/SOURCE_CONNECTOR")]
-async fn source_connector() -> NamedFile {
-  NamedFile::open("static/swag.js").await.unwrap()
+async fn source_connector() -> content::RawJavaScript<NamedFile> {
+  content::RawJavaScript(NamedFile::open("static/swag.js").await.unwrap())
 }
 
 #[get("/THE_SOURCE")]
