@@ -2,14 +2,17 @@ use rocket::{
   serde::{self, uuid::Uuid},
   tokio::sync::{mpsc::Sender, RwLock},
 };
+use serde_with::{serde_as, Bytes};
 use std::{collections::HashMap, sync::Arc};
 
+#[serde_as]
 #[derive(serde::Deserialize, serde::Serialize, Clone)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 #[serde(crate = "rocket::serde")]
 pub struct Record {
   pub file_name: String,
-  pub data: String,
+  #[serde_as(as = "Bytes")]
+  pub data: Vec<u8>,
 }
 
 #[derive(serde::Serialize, Clone)]

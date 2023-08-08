@@ -1,3 +1,6 @@
+"use strict";
+import * as msgpack from "./msgpack";
+
 namespace SOURCE_CONNECTOR {
   namespace SOURCE_MISSIVE {
     export namespace INVITATION_REQUEST_RESPONSE {
@@ -109,7 +112,7 @@ namespace SOURCE_CONNECTOR {
   type RECORD = {
     TYPE: "RECORD";
     FILE_NAME: string;
-    DATA: string;
+    DATA: Uint8Array;
   };
   type MISSIVE = {
     TYPE: "MISSIVE";
@@ -125,7 +128,7 @@ namespace SOURCE_CONNECTOR {
   let THE_SELF: VESSEL;
   //let OTHERS: EXTERNAL_VESSEL[] = [];
   function SEND_VESSEL_MISSIVE(MISSIVE: VESSEL_MISSIVE) {
-    SOURCE_CONNECTION.send(JSON.stringify(MISSIVE));
+    SOURCE_CONNECTION.send(msgpack.serialize(MISSIVE));
   }
   const WEB_SOCKET_SUFFIX: string =
     window.location.protocol.replace("http", "ws") + window.location.host;
@@ -143,8 +146,11 @@ namespace SOURCE_CONNECTOR {
         })(),
       });
     };
-    SOURCE_CONNECTION.onmessage = async (ev) => {
-      const MISSIVE: SOURCE_MISSIVE = JSON.parse(ev.data);
+    SOURCE_CONNECTION.onmessage = async (ev: MessageEvent<Blob>) => {
+      console.log(ev.data);
+      const MISSIVE: SOURCE_MISSIVE = msgpack.deserialize(
+        new Uint8Array(await ev.data.arrayBuffer())
+      ) as SOURCE_MISSIVE;
       console.log("Recieved:", MISSIVE);
       /*
     type Map<K extends string | number | symbol, T> = Record<K, T>;
@@ -311,14 +317,10 @@ namespace SOURCE_CONNECTOR {
         MEDIA: {
           TYPE: "RECORD",
           FILE_NAME: ((input.files as FileList).item(0) as File).name as string,
-          DATA: btoa(
-            String.fromCharCode(
-              ...new Uint8Array(
-                (await (
-                  (input.files as FileList).item(0) as File
-                ).arrayBuffer()) as ArrayBuffer
-              )
-            )
+          DATA: new Uint8Array(
+            (await (
+              (input.files as FileList).item(0) as File
+            ).arrayBuffer()) as ArrayBuffer
           ),
         },
       });
