@@ -73,11 +73,30 @@ table {
 
 .STATUS > div {
   width: 3.375rem;
-  background: url(STATUS/0), #cfcfcf;
   background-size: contain;
   background-repeat: no-repeat;
   background-position: center;
 }
+.DEFAULT_0 {
+  background: url(STATUS/DEFAULT_0.GIF), #141414;
+}
+.DEFAULT_0:hover {
+  background: url(STATUS/DEFAULT_0_HOVER.GIF), #3e3e3e;
+}
+.ALERT_0 {
+  background: url(STATUS/ALERT_0.GIF), #ffff00;
+}
+.ALERT_0:hover {
+  background: url(STATUS/ALERT_0_HOVER.GIF), #ffff43;
+}
+
+.ALERT_1 {
+  background: url(STATUS/ALERT_1.GIF), #ff0000;
+}
+.ALERT_1:hover {
+  background: url(STATUS/ALERT_1_HOVER.GIF), #ff4343;
+}
+
 .NAME > div > div {
   font-size: 1.5rem;
   font-weight: bold;

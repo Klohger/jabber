@@ -6,7 +6,7 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-queues = "1.1.0"
 rocket = { version = "0.5.0-rc.3", git = "https://github.com/SergioBenitez/Rocket", features = ["json", "uuid"] }
 ws = { package = "rocket_ws", git = "https://github.com/SergioBenitez/Rocket/", version = "0.1.0-rc.3" }
 uuid = { version = "1.4.1", features = ["v4", "fast-rng"] }
+tokio-stream = { version = "0.1.14", features = ["sync"] }

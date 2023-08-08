@@ -1,11 +1,8 @@
-use std::{collections::HashMap, sync::Arc};
-
-use queues::{IsQueue, Queue};
 use rocket::{
   serde::{self, uuid::Uuid},
-  tokio::sync::RwLock,
+  tokio::sync::{mpsc::Sender, RwLock},
 };
-use ws::stream::DuplexStream;
+use std::{collections::HashMap, sync::Arc};
 
 #[derive(serde::Deserialize, serde::Serialize, Clone)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
@@ -38,9 +35,9 @@ pub enum InvitationRequestResponse {
 #[serde(crate = "rocket::serde")]
 pub enum SourceMissive {
   InvitationRequestResponse {
+    #[serde(rename = "RESPONSE")]
     response: InvitationRequestResponse,
   },
-  InvalidCredentials,
   RecieveMedia {
     #[serde(rename = "MONIKER")]
     moniker: String,
@@ -56,24 +53,33 @@ pub enum SourceMissive {
     moniker: String,
     reason: LeaveReason,
   },
+  Disconnect {
+    reason: LeaveReason,
+  },
 }
 #[derive(serde::Deserialize, serde::Serialize, Clone)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 #[serde(crate = "rocket::serde")]
 pub enum LeaveReason {
+  InvalidCredentials,
   SourceShutDown,
-  AFK,
+  VesselDisconnected,
+  TimedOut,
 }
-#[derive(serde::Deserialize, Clone)]
+#[derive(serde::Deserialize, serde::Serialize, Clone)]
 #[serde(tag = "TYPE")]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 #[serde(crate = "rocket::serde")]
 pub enum VesselMissive {
   RequestInvitation {
-    #[serde(rename = "SUGGESTED_USERNAME")]
-    suggested_username: String,
+    #[serde(rename = "SUGGESTED_MONIKER")]
+    suggested_moniker: String,
   },
   SendMedia {
+    #[serde(rename = "MONIKER")]
+    moniker: String,
+    #[serde(rename = "PASSWORD")]
+    password: Uuid,
     #[serde(rename = "RECIPIENT")]
     recipient: String,
     #[serde(rename = "MEDIA")]
@@ -86,43 +92,19 @@ pub enum VesselMissive {
 #[serde(tag = "TYPE")]
 #[serde(crate = "rocket::serde")]
 pub enum Media {
-  Missive(String),
+  Missive {
+    #[serde(rename = "TEXT")]
+    text: String,
+  },
   Record(Record),
 }
-pub type Please = Option<Arc<RwLock<DuplexStream>>>;
 pub struct Vessel {
-  pub last_interaction: rocket::time::Instant,
-  pub stream : Option<Arc<RwLock<DuplexStream>>>,
-  pub password: Uuid,
-}
-pub struct JoiningVessel {
-  pub started_joining: std::time::Instant,
+  pub last_interaction: RwLock<rocket::time::Instant>,
+  pub message_sender: Arc<Sender<SourceMissive>>,
   pub password: Uuid,
 }
 
-pub type Vessels = Arc<CurrentVessels>;
+pub type Vessels = Arc<RwLock<HashMap<String, Vessel>>>;
 
-#[derive(Default)]
-pub struct CurrentVessels {
-  pub active_vessels: RwLock<HashMap<String, Arc<RwLock<Vessel>>>>,
-  pub joining_vessels: RwLock<HashMap<String, JoiningVessel>>,
-}
-
-pub const TIME_OUT: rocket::time::Duration = rocket::time::Duration::hours(24);
-pub const JOIN_TIME_OUT: std::time::Duration = std::time::Duration::from_secs(60);
-/*
-pub struct EventStreamProtector<S>(EventStream<S>);
-
-impl<'r, S: Stream<Item = Event> + Send + 'r> Responder<'r, 'r> for EventStreamProtector<S> {
-  fn respond_to(self, request: &'r rocket::Request<'_>) -> rocket::response::Result<'r> {
-    match self.0.respond_to(request) {
-      Err(_) => todo!(),
-      r => r,
-    }
-  }
-}
-macro_rules! EventStreamProtector {
-      () => ($crate::_typed_stream!(EventStream, $crate::response::stream::Event));
-      ($($s:tt)*) => ($crate::_typed_stream!(EventStream, $($s)*));
-  }
-*/
+pub const TIME_OUT: rocket::time::Duration = rocket::time::Duration::hours(12);
+pub const TIME_OUT_CHECKER_INTERVAL: rocket::tokio::time::Duration = rocket::tokio::time::Duration::from_secs(TIME_OUT.whole_seconds() as u64 * 2);

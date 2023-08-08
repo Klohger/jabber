@@ -24,15 +24,19 @@ namespace SOURCE_CONNECTOR {
       TYPE: "VESSEL_ENTERED";
       MONIKER: string;
     };
-    export namespace VESSEL_LEFT {
-      export type LEAVE_REASON = "SOURCE_SHUT_DOWN" | "AFK";
-    }
+    export type LEAVE_REASON =
+      | "INVALID_CREDENTIALS"
+      | "SOURCE_SHUT_DOWN"
+      | "VESSEL_DISCONNECTED"
+      | "TIMED_OUT";
     export type VESSEL_LEFT = {
       TYPE: "VESSEL_LEFT";
-      MONIKER: VESSEL_LEFT.LEAVE_REASON;
+      MONIKER: string;
+      REASON: LEAVE_REASON;
     };
-    export type INVALID_CREDENTIALS = {
-      TYPE: "INVALID_CREDENTIALS";
+    export type DISCONNECT = {
+      TYPE: "DISCONNECT";
+      REASON: LEAVE_REASON;
     };
   }
 
@@ -41,11 +45,11 @@ namespace SOURCE_CONNECTOR {
     | SOURCE_MISSIVE.RECIEVE_MEDIA
     | SOURCE_MISSIVE.VESSEL_ENTERED
     | SOURCE_MISSIVE.VESSEL_LEFT
-    | SOURCE_MISSIVE.INVALID_CREDENTIALS;
+    | SOURCE_MISSIVE.DISCONNECT;
   namespace VESSEL_MISSIVE {
     export type REQUEST_INVITATION = {
       TYPE: "REQUEST_INVITATION";
-      SUGGESTED_USERNAME: string;
+      SUGGESTED_MONIKER: string;
     };
     export type SEND_MEDIA = {
       TYPE: "SEND_MEDIA";
@@ -55,14 +59,56 @@ namespace SOURCE_CONNECTOR {
   }
   type VESSEL_MISSIVE =
     | VESSEL_MISSIVE.REQUEST_INVITATION
-    | VESSEL_MISSIVE.SEND_MEDIA;
+    | (VESSEL & VESSEL_MISSIVE.SEND_MEDIA);
   type VESSEL = {
     MONIKER: string;
     PASSWORD: string;
   };
+  /*
+  type STATUS = "DEFAULT" | "ALERT";
+  
+  class EXTERNAL_VESSEL {
+    MONIKER: string;
+    STATUS_ICON: HTMLDivElement;
+    STATUS_CHANGER_ABORT: AbortController = new AbortController();
+    constructor(MONIKER: string, STATUS_ICON: HTMLDivElement) {
+      this.MONIKER = MONIKER;
+      this.STATUS_ICON = STATUS_ICON;
+    }
+    async SetStatus(STATUS: STATUS) {
+      switch (STATUS) {
+        case "DEFAULT":
+          this.STATUS_CHANGER_ABORT.abort();
+          this.STATUS_ICON.classList.remove("ALERT_0", "ALERT_1");
+          this.STATUS_ICON.classList.add("DEFAULT_0");
+          break;
+        case "ALERT":
+          async () => {
+            const abortListener = () => {
+              this.STATUS_CHANGER_ABORT.signal.removeEventListener(
+                "abort",
+                abortListener
+              );
+              throw undefined;
+            };
+            this.STATUS_CHANGER_ABORT.signal.addEventListener(
+              "abort",
+              abortListener
+            );
+            this.STATUS_ICON.classList.add("ALERT_0");
+            while (await new Promise<true>((r) => setTimeout(r, 500))) {
+              this.STATUS_ICON.classList.toggle("ALERT_0");
+              this.STATUS_ICON.classList.toggle("ALERT_1");
+            }
+          };
+          break;
+      }
+    }
+  }
+  */
   type RECORD = {
     TYPE: "RECORD";
-    FILENAME: string;
+    FILE_NAME: string;
     DATA: string;
   };
   type MISSIVE = {
@@ -71,30 +117,24 @@ namespace SOURCE_CONNECTOR {
   };
   export type MEDIA = RECORD | MISSIVE;
 
-  const enum STATUS {
-    ACCEPTED = 202,
-    UNAUTHORIZED = 401,
-  }
-
   let SOURCE_CONNECTION!: WebSocket;
   const CONNECT_BUTTON = <HTMLButtonElement>(
     document.querySelector("#CONNECT_BUTTON")
   );
   const THE_TABLE = <HTMLTableElement>document.querySelector("#THE_TABLE");
   let THE_SELF: VESSEL;
+  //let OTHERS: EXTERNAL_VESSEL[] = [];
   function SEND_VESSEL_MISSIVE(MISSIVE: VESSEL_MISSIVE) {
     SOURCE_CONNECTION.send(JSON.stringify(MISSIVE));
   }
   const WEB_SOCKET_SUFFIX: string =
     window.location.protocol.replace("http", "ws") + window.location.host;
   function CONNECT_TO_SOURCE() {
-    SOURCE_CONNECTION = new WebSocket(
-      `${WEB_SOCKET_SUFFIX}/THE_SOURCE/ENTER/${THE_SELF.MONIKER}/${THE_SELF.PASSWORD}`
-    );
+    SOURCE_CONNECTION = new WebSocket(`${WEB_SOCKET_SUFFIX}/THE_SOURCE`);
     SOURCE_CONNECTION.onopen = (_) => {
       SEND_VESSEL_MISSIVE({
         TYPE: "REQUEST_INVITATION",
-        SUGGESTED_USERNAME: (() => {
+        SUGGESTED_MONIKER: (() => {
           let sugg: string | null;
           do {
             sugg = prompt("yooo");
@@ -126,18 +166,6 @@ namespace SOURCE_CONNECTOR {
     };
     */
       switch (MISSIVE.TYPE) {
-        case "INVALID_CREDENTIALS":
-          SEND_VESSEL_MISSIVE({
-            TYPE: "REQUEST_INVITATION",
-            SUGGESTED_USERNAME: (() => {
-              let sugg: string | null;
-              do {
-                sugg = prompt("yooo");
-              } while (sugg === null);
-              return sugg;
-            })(),
-          });
-          break;
         case "INVITATION_REQUEST_RESPONSE":
           switch (MISSIVE.RESPONSE.TYPE) {
             case "INVITATION":
@@ -152,7 +180,7 @@ namespace SOURCE_CONNECTOR {
             case "MONIKER_TAKEN":
               SEND_VESSEL_MISSIVE({
                 TYPE: "REQUEST_INVITATION",
-                SUGGESTED_USERNAME: (() => {
+                SUGGESTED_MONIKER: (() => {
                   let sugg: string | null;
                   do {
                     sugg = prompt("yooo");
@@ -164,7 +192,7 @@ namespace SOURCE_CONNECTOR {
             case "TOO_COMPLEX":
               SEND_VESSEL_MISSIVE({
                 TYPE: "REQUEST_INVITATION",
-                SUGGESTED_USERNAME: (() => {
+                SUGGESTED_MONIKER: (() => {
                   let sugg: string | null;
                   do {
                     sugg = prompt("yooo");
@@ -176,18 +204,47 @@ namespace SOURCE_CONNECTOR {
           }
           break;
         case "RECIEVE_MEDIA":
-          ((x: never) => x)(MISSIVE);
+          switch (MISSIVE.MEDIA.TYPE) {
+            case "MISSIVE":
+              alert(
+                `RECIEVED MISSIVE FROM "${MISSIVE.MONIKER}":\n${MISSIVE.MEDIA.TEXT}`
+              );
+              break;
+            case "RECORD":
+              alert(
+                `RECIEVED RECORD "${MISSIVE.MEDIA.FILE_NAME}" FROM "${MISSIVE.MONIKER}". Downloading...`
+              );
+              const link = document.createElement("a");
+              const file = new Blob([new Uint8Array(MISSIVE.MEDIA.DATA)]);
+              link.href = URL.createObjectURL(file);
+              link.download = MISSIVE.MEDIA.FILE_NAME;
+              link.click();
+              link.remove();
+              break;
+          }
           break;
         case "VESSEL_ENTERED":
           THE_TABLE.appendChild(SHAPE_VESSEL_HTML_ELEMENT(MISSIVE.MONIKER));
           break;
         case "VESSEL_LEFT":
-          document
-            .querySelector(`.VESSEL[moniker="${MISSIVE.MONIKER}"]`)
-            ?.remove();
+          (
+            document.querySelector(
+              `.VESSEL[moniker="${MISSIVE.MONIKER}"]`
+            ) as Element
+          ).remove();
           break;
-        default:
-          ((x: never) => x)(MISSIVE);
+        case "DISCONNECT":
+          SEND_VESSEL_MISSIVE({
+            TYPE: "REQUEST_INVITATION",
+            SUGGESTED_MONIKER: (() => {
+              let sugg: string | null;
+              do {
+                sugg = prompt("yooo");
+              } while (sugg === null);
+              return sugg;
+            })(),
+          });
+          break;
       }
     };
   }
@@ -199,7 +256,7 @@ namespace SOURCE_CONNECTOR {
     <tbody>
       <tr class="VESSEL" moniker="${MONIKER}">
         <td class="STATUS OUT">
-          <div class="IN"></div>
+          <div class="IN DEFAULT_0"></div>
         </td>
         <td class="NAME OUT">
           <div class="CENTERER">
@@ -216,24 +273,64 @@ namespace SOURCE_CONNECTOR {
       </tr>
     </tbody>`.trim();
     let VESSEL = <HTMLTableRowElement>(
-      TABLE.firstElementChild?.firstElementChild
+      (TABLE.firstElementChild as Element).firstElementChild
     );
-    VESSEL.querySelector(".MISSIVE_INPUT > .BUTTON")?.addEventListener(
-      "click",
-      (ev) => {
-        ev.preventDefault();
-        let MISSIVE = (<HTMLInputElement>(
-          VESSEL.querySelector('.MISSIVE_INPUT > input[type="text"]')
-        )).value.trim();
-        if (MISSIVE !== "") {
-          SEND_VESSEL_MISSIVE({
-            TYPE: "SEND_MEDIA",
-            RECIPIENT: MONIKER,
-            MEDIA: { TYPE: "MISSIVE", TEXT: MISSIVE.toUpperCase() },
-          });
-        }
+    /*
+    OTHERS.push(
+      new EXTERNAL_VESSEL(
+        MONIKER,
+        VESSEL.querySelector(".STATUS > div") as HTMLDivElement
+      )
+    );
+    */
+    (
+      VESSEL.querySelector(".MISSIVE_INPUT > .BUTTON") as HTMLDivElement
+    ).addEventListener("click", (ev) => {
+      ev.preventDefault();
+      let MISSIVE = (<HTMLInputElement>(
+        VESSEL.querySelector('.MISSIVE_INPUT > input[type="text"]')
+      )).value.trim();
+      if (MISSIVE !== "") {
+        SEND_VESSEL_MISSIVE({
+          ...THE_SELF,
+          TYPE: "SEND_MEDIA",
+          RECIPIENT: MONIKER,
+          MEDIA: { TYPE: "MISSIVE", TEXT: MISSIVE.toUpperCase() },
+        });
       }
-    );
+    });
+    const input = VESSEL.querySelector<HTMLInputElement>(
+      '.RECORD_INPUT > input[type="file"]'
+    ) as HTMLInputElement;
+    input.addEventListener("change", async () => {
+      SEND_VESSEL_MISSIVE({
+        TYPE: "SEND_MEDIA",
+        MONIKER: THE_SELF.MONIKER,
+        PASSWORD: THE_SELF.PASSWORD,
+        RECIPIENT: MONIKER,
+        MEDIA: {
+          TYPE: "RECORD",
+          FILE_NAME: ((input.files as FileList).item(0) as File).name as string,
+          DATA: btoa(
+            String.fromCharCode(
+              ...new Uint8Array(
+                (await (
+                  (input.files as FileList).item(0) as File
+                ).arrayBuffer()) as ArrayBuffer
+              )
+            )
+          ),
+        },
+      });
+    });
+
+    (
+      VESSEL.querySelector(".RECORD_INPUT > .BUTTON") as Element
+    ).addEventListener("click", (ev) => {
+      ev.preventDefault();
+
+      input.click();
+    });
 
     return VESSEL;
   }

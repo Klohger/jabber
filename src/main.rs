@@ -1,17 +1,22 @@
 #[macro_use]
 extern crate rocket;
 mod data_types;
-use data_types::{InvitationRequestResponse, SourceMissive, Vessels, JOIN_TIME_OUT};
+
+use data_types::{InvitationRequestResponse, SourceMissive, Vessels, TIME_OUT_CHECKER_INTERVAL};
 use rocket::{
   fs::NamedFile,
   futures::{SinkExt, StreamExt},
   serde::uuid::Uuid,
-  tokio::{self, pin, select},
+  tokio::{
+    self, select,
+    sync::{mpsc::channel, RwLock},
+  },
   Shutdown, State,
 };
+use std::sync::Arc;
 use ws::Message;
 
-use crate::data_types::{JoiningVessel, VesselMissive, Please};
+use crate::data_types::{LeaveReason, Vessel, VesselMissive, TIME_OUT};
 
 #[get("/")]
 async fn index() -> NamedFile {
@@ -31,168 +36,69 @@ async fn status_icon(i: usize) -> NamedFile {
 async fn source_connector() -> NamedFile {
   NamedFile::open("static/swag.js").await.unwrap()
 }
-/*
-#[get("/THE_SOURCE/<moniker>/<password>")]
-fn the_source<'a>(ws: ws::WebSocket, mut shutdown: Shutdown, moniker: String, password: Uuid, vessels: &'a State<Vessels>) -> ws::Channel<'a> {
-  /*
-  async fn notify_vessel_entered(vessel: Arc<RwLock<Vessel>>, moniker: String) {
-    vessel
-      .write()
-      .await
-      .add_missive(SourceMissive::VesselEntered { moniker });
-  }
-  async fn notify_vessel_left(vessel: Arc<RwLock<Vessel>>, moniker: String) {
-    vessel
-      .write()
-      .await
-      .add_missive(SourceMissive::VesselLeft { moniker });
-  }
-  let stream = EventStream! {
-    if vessels.joining_vessels.read().await.contains_key(&moniker)
-    && vessels.joining_vessels.read().await.get(&moniker).unwrap().read().await.password == password
-    {
 
-      for handle in vessels
-        .active_vessels
-        .read()
-        .await
-        .values()
-        .zip([moniker.clone()].iter().cycle())
-        .map(|(vessel, moniker)| tokio::spawn(notify_vessel_entered(vessel.clone(), moniker.clone())))
-      {
-        handle.await.unwrap();
-      }
-      let vessel = vessels
-        .joining_vessels
-        .write()
-        .await
-        .remove(&moniker)
-        .unwrap();
-      vessels
-        .active_vessels
-        .write()
-        .await
-        .insert(moniker.clone(), vessel);
-      let mut interval = tokio::time::interval(tokio::time::Duration::from_secs(1));
-      loop {
-        select! {
-          _ = interval.tick() => {
-            println!("doing the swag with {}", moniker);
-            if rocket::time::Instant::now() - vessels.active_vessels.read().await.get(&moniker).unwrap().read().await.last_interaction >= TIME_OUT {
-              yield Event::json(
-                &SourceMissive::ForcefulLeave(
-                  "THE SOURCE found you of little substance, and has thus
-                  you've been forcefully exited from It. (Away From Keyboard)".to_owned())).event("FORCEFUL_LEAVE");
-              vessels.active_vessels.write().await.remove_entry(&moniker).unwrap();
-              for handle in vessels
-                .active_vessels
-                .read()
-                .await
-                .values()
-                .zip([moniker.clone()].iter().cycle())
-                .map(|(vessel, moniker)| tokio::spawn(notify_vessel_left(vessel.clone(), moniker.clone())))
-              {
-                handle.await.unwrap();
-              }
-              break;
-            }
-            if let Some(moniker) = vessels.active_vessels.read().await.get(&moniker) {
-              if let Ok(missive) = moniker.write().await.missives.remove() {
-                match missive {
-                  SourceMissive::RecieveMedia { .. } => yield Event::json(&missive).event("RECIEVE_MEDIA"),
-                  SourceMissive::VesselEntered { moniker: _ } => yield Event::json(&missive).event("VESSEL_ENTERED"),
-                  SourceMissive::VesselLeft { moniker: _ } => yield Event::json(&missive).event("VESSEL_LEFT"),
-                  _ => (),
-                }
-              }
-            }
-          },
-          _ = &mut shutdown => {
-            println!("wowie");
-            yield Event::json(&SourceMissive::ForcefulLeave("THE SOURCE is evaporating, leaving only you. (Server Shutdown)".to_owned())).event("FORCEFUL_LEAVE");
-            break;
-          }
-        }
-      }
-
-    } else {
-      yield Event::json(&SourceMissive::Unworthy("...but THE SOURCE did not respond. Perhaps it did not see you worthy. (Invalid Credentials)".to_owned()))
-        .event("Unworthy");
-    }
-
-    println!("wowie");
-  };
-  println!("wowie");
+#[get("/THE_SOURCE")]
+fn the_source<'a>(ws: ws::WebSocket, mut shutdown: Shutdown, vessels: &'a State<Vessels>) -> ws::Channel<'a> {
   ws.channel(move |mut stream| {
     Box::pin(async move {
-      while let Some(message) = stream.next().await {
-        let _ = stream.send(message?).await;
-      }
-
-      Ok(())
-    })
-  })
-  */
-
-  ws.channel(move |mut stream| {
-    Box::pin(async move {
-      let mut interval = tokio::time::interval(tokio::time::Duration::from_secs(1));
+      let mut vessel: Option<(String, Uuid)> = None;
+      let (sender, mut reciever) = channel(1);
+      let sender = Arc::new(sender);
+      let mut interval = tokio::time::interval(TIME_OUT_CHECKER_INTERVAL);
       loop {
         select! {
           message = stream.next() => {
             if let Some(message) = message {
               match message {
-                Ok(message) =>  match message {
-                    Message::Text(text) => match rocket::serde::json::from_str::<VesselMissive>(&text).unwrap() {
-                        VesselMissive::RequestInvitation { suggested_username } => {
-                          if suggested_username.is_ascii() {
-                            let suggested_username = suggested_username.trim().to_ascii_uppercase().to_owned();
-                            if suggested_username == "KLOHGER"
-                            || vessels
-                              .active_vessels
-                              .read()
-                              .await
-                              .contains_key(&suggested_username)
-                          {
-                            stream.send(
-                              ws::Message::Text(
-                                rocket::serde::json::to_string(
-                                  &SourceMissive::InvitationRequestResponse { response: InvitationRequestResponse::MonikerTaken })
-                                .unwrap()))
-                              .await.unwrap();
-                            /*
-                            return Err(status::Unauthorized(
-                              "...but THE SOURCE did not respond. Maybe someone wielding your moniker has already entered?",
-                            ));
-                            */
-                          };
+                Ok(message) => {
+                  if let Some(vessel) = vessel.as_mut() {
+                    *vessels.read().await.get(&vessel.0.clone()).unwrap().last_interaction.write().await = rocket::time::Instant::now();
+                  }
+                  match message {
+                    Message::Text(text) => {
+                      println!("GOT TEXT {text}");
+                      match rocket::serde::json::from_str::<VesselMissive>(&text).unwrap() {
+                        VesselMissive::RequestInvitation { suggested_moniker } => {
+                          if suggested_moniker.is_ascii() {
+                            let suggested_moniker = suggested_moniker.to_ascii_uppercase().trim().to_owned();
 
-                          let moniker = suggested_username;
-                          let password = Uuid::new_v4();
-                          let mut joining_vessels = vessels.joining_vessels.write().await;
-                          joining_vessels.insert(
-                            moniker.clone(),
-                            JoiningVessel {
-                              password,
-                              started_joining: std::time::Instant::now(),
-                            },
-                          );
-                          stream.send(
-                            ws::Message::Text(
-                              rocket::serde::json::to_string(
-                                &SourceMissive::InvitationRequestResponse {
-                                  response: InvitationRequestResponse::Invitation {
-                                    moniker,
-                                    password,
-                                    other_vessels:
-                                    vessels
-                                    .active_vessels
-                                    .read()
-                                    .await
-                                    .keys()
-                                    .map(|moniker| moniker.clone()).collect() } })
-                              .unwrap()))
-                            .await.unwrap();
+                            if suggested_moniker == "KLOHGER" || vessels.read().await.contains_key(&suggested_moniker) {
+                              stream.send(
+                                ws::Message::Text(
+                                  rocket::serde::json::to_string(
+                                    &SourceMissive::InvitationRequestResponse { response: InvitationRequestResponse::MonikerTaken })
+                                  .unwrap()))
+                                .await.unwrap();
+
+                              /*
+                              return Err(status::Unauthorized(
+                                "...but THE SOURCE did not respond. Maybe someone wielding your moniker has already entered?",
+                              ));
+                              */
+                            } else {
+                              vessel = Some((suggested_moniker, Uuid::new_v4()));
+                              let mut vessels = vessels.write().await;
+                              for v in vessels.values() {
+                                v.message_sender.send(SourceMissive::VesselEntered { moniker: vessel.as_mut().unwrap().0.clone() }).await.unwrap();
+                              }
+                              vessels.insert(
+                                vessel.as_mut().unwrap().0.clone(),
+                                Vessel { last_interaction: RwLock::new(rocket::time::Instant::now()), message_sender: sender.clone(), password: vessel.as_mut().unwrap().1 }
+                              );
+                              stream.send(
+                                ws::Message::Text(
+                                  rocket::serde::json::to_string(
+                                    &SourceMissive::InvitationRequestResponse {
+                                      response: InvitationRequestResponse::Invitation {
+                                        moniker : vessel.as_mut().unwrap().0.clone(),
+                                        password : vessel.as_mut().unwrap().1,
+                                        other_vessels:
+                                        vessels
+                                        .keys()
+                                        .map(|moniker| moniker.clone()).collect() } })
+                                  .unwrap()))
+                                .await.unwrap();
+                            }
 
 
                           } else {
@@ -205,40 +111,63 @@ fn the_source<'a>(ws: ws::WebSocket, mut shutdown: Shutdown, moniker: String, pa
                             //return Err(status::Unauthorized("...but the name was too complex."));
                           }
                         },
-                        VesselMissive::SendMedia { recipient, media } => { let active_vessels = vessels.active_vessels.read().await; if active_vessels.contains_key(&recipient) {
-                            active_vessels.get_mut(&recipient).
+                        VesselMissive::SendMedia { moniker, password, recipient, media } => {
+                          let vessel = vessel.as_mut();
+                          if let Some(vessel) = vessel {
+                            if vessel.0 == moniker && vessel.1 == password {
+                              let vessels =vessels.read().await;
+                              let recipient = vessels.get(&recipient).unwrap();
+                              recipient.message_sender.send(SourceMissive::RecieveMedia { moniker: vessel.0.clone(), media }).await.unwrap();
+                              *recipient.last_interaction.write().await = rocket::time::Instant::now();
+                            } else {
+                              stream.send(Message::Text(rocket::serde::json::to_string(&SourceMissive::Disconnect { reason: LeaveReason::InvalidCredentials }).unwrap())).await.unwrap();
+                            }
+                          } else {
+                            stream.send(Message::Text(rocket::serde::json::to_string(&SourceMissive::Disconnect { reason: LeaveReason::InvalidCredentials }).unwrap())).await.unwrap();
                           }
                         }
+                      }
                     },
-                    Message::Close(_) => println!("CLOSE CLOSE CLOSE"),
-                    whuj => panic!("{whuj:?}")
+                    Message::Close(_) => {
+                      if let Some(vessel) = vessel.as_mut() {
+                        let mut vessels = vessels.write().await;
+                        vessels.remove(&vessel.0.clone());
+                        for v in vessels.values() {
+                          v.message_sender.send(SourceMissive::VesselLeft { moniker: vessel.0.clone(), reason: LeaveReason::VesselDisconnected }).await.unwrap();
+                        }
+                      }
+                      break;
+                    },
+                    Message::Binary(_) => todo!(),
+                    Message::Ping(data) => stream.send(Message::Pong(data)).await.unwrap(),
+                    Message::Pong(_) => todo!(),
+                    Message::Frame(_) => todo!(),
+                  }
                 },
                 Err(err) => println!("GOt an error: {err}"),
               }
-            } else {
-              println!("lost connection i guess");
-              break;
             }
           },
-          _ = interval.tick() => {
-            if vessels.joining_vessels.read().await.contains_key(&moniker)
-            && vessels.joining_vessels.read().await.get(&moniker).unwrap().password == password
-            {
-
-            } else {
-              stream.send(
-                ws::Message::Text(
-                  rocket::serde::json::to_string(
-                    &SourceMissive::InvalidCredentials)
-                  .unwrap()))
-                .await.unwrap();
-              // "...but THE SOURCE did not respond. Perhaps it did not see you worthy. (Invalid Credentials)"
-              break;
+          message = reciever.recv() => {
+            if let Some(message) = message {
+              stream.send(Message::Text(rocket::serde::json::to_string(&message).unwrap())).await.unwrap();
             }
-            println!("i am a waiting")
+          }
+          _ = interval.tick() => {
+            if let Some(vessel) = vessel.as_mut() {
+              if (rocket::time::Instant::now() - *vessels.read().await.get(&vessel.0).unwrap().last_interaction.read().await) > TIME_OUT {
+                stream.send(Message::Text(rocket::serde::json::to_string(&SourceMissive::Disconnect { reason: LeaveReason::TimedOut }).unwrap())).await.unwrap();
+                let mut vessels = vessels.write().await;
+                vessels.remove(&vessel.0.clone());
+                for v in vessels.values() {
+                  v.message_sender.send(SourceMissive::VesselLeft { moniker: vessel.0.clone(), reason: LeaveReason::TimedOut }).await.unwrap();
+                }
+                break;
+              }
+            }
           },
           _ = &mut shutdown => {
-            println!("wowie");
+            stream.send(Message::Text(rocket::serde::json::to_string(&SourceMissive::Disconnect { reason: LeaveReason::SourceShutDown }).unwrap())).await.unwrap();
             break;
           }
         }
@@ -247,119 +176,8 @@ fn the_source<'a>(ws: ws::WebSocket, mut shutdown: Shutdown, moniker: String, pa
     })
   })
 }
-*/
-/*
-#[get("/THE_SOURCE/SEND/MISSIVE/<moniker>/<password>/<recipient>/<missive>")]
-async fn send_missive(
-  moniker: String,
-  password: Uuid,
-  recipient: String,
-  missive: String,
-  vessels: &State<Vessels>,
-) -> Result<status::Accepted<()>, status::Unauthorized<&'static str>> {
-  let vessel = match vessels.active_vessels.read().await.get(&moniker) {
-    Some(vessel) => vessel.clone(),
-    None => {
-      return Err(status::Unauthorized(
-        "...but THE SOURCE did not recognize you.",
-      ))
-    }
-  };
 
-  if vessel.read().await.password != password {
-    return Err(status::Unauthorized(
-      "...but THE SOURCE did not recognize you.",
-    ));
-  }
-
-  let recipient = match vessels.active_vessels.read().await.get(&recipient) {
-    Some(recipient) => recipient.clone(),
-    None => {
-      return Err(status::Unauthorized(
-        "...but THE SOURCE could not find the recipient.",
-      ))
-    }
-  };
-
-  recipient
-    .write()
-    .await
-    .add_missive(SourceMissive::RecieveMedia {
-      moniker: moniker.clone(),
-      media: Media::Missive(missive),
-    });
-
-  Ok(status::Accepted(()))
-}
-#[get("/THE_SOURCE/SEND/RECORD/<moniker>/<password>/<recipient>/<file_name>/<data>")]
-async fn send_record(
-  moniker: String,
-  password: Uuid,
-  recipient: String,
-  file_name: String,
-  data: String,
-  vessels: &State<Vessels>,
-) -> Result<status::Accepted<()>, status::Unauthorized<&'static str>> {
-  let vessel = match vessels.active_vessels.read().await.get(&moniker) {
-    Some(vessel) => vessel.clone(),
-    None => {
-      return Err(status::Unauthorized(
-        "...but THE SOURCE did not recognize you.",
-      ))
-    }
-  };
-
-  if vessel.read().await.password != password {
-    return Err(status::Unauthorized(
-      "...but THE SOURCE did not recognize you.",
-    ));
-  }
-
-  let recipient = match vessels.active_vessels.read().await.get(&recipient) {
-    Some(recipient) => recipient.clone(),
-    None => {
-      return Err(status::Unauthorized(
-        "...but THE SOURCE could not find the recipient.",
-      ))
-    }
-  };
-
-  recipient
-    .write()
-    .await
-    .add_missive(SourceMissive::RecieveMedia {
-      moniker: moniker.clone(),
-      media: Media::Record(Record { file_name, data }),
-    });
-
-  Ok(status::Accepted(()))
-}
-*/
-
-#[rocket::main]
-async fn main() -> Result<(), rocket::Error> {
-  let vessels = Vessels::default();
-  let please = Please::default();
-  let mut interval = rocket::tokio::time::interval(JOIN_TIME_OUT * 2);
-  let rocket = rocket::build().manage(please).mount("/", routes![index, css, source_connector, status_icon, the_source,]).launch();
-  
-  pin!(rocket);
-  
-  /*
-  loop {
-    select! {
-      _ = interval.tick() => {
-        vessels.joining_vessels.write().await.retain(|_, vessel|
-          std::time::Instant::now() - vessel.started_joining <= JOIN_TIME_OUT
-        );
-      },
-      rocket = &mut rocket => {
-        rocket?;
-        break;
-      }
-    }
-  }
-  */
-
-  Ok(())
+#[rocket::launch]
+async fn launch() -> _ {
+  rocket::build().manage(Vessels::default()).mount("/", routes![index, css, source_connector, status_icon, the_source])
 }
