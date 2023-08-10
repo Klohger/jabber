@@ -1,6 +1,72 @@
 "use strict";
 import * as msgpack from "./msgpack";
 
+namespace WebHelper {
+  export class HTMLElementBuilder<TAG extends keyof HTMLElementTagNameMap> {
+    private inner: HTMLElementTagNameMap[TAG];
+    constructor(tag: TAG) {
+      this.inner = document.createElement(tag);
+    }
+
+    public withChild<CK extends keyof HTMLElementTagNameMap>(
+      child: HTMLElementBuilder<CK>
+    ): this;
+    public withChild<N extends Node>(child: N): this;
+    public withChild<CK extends keyof HTMLElementTagNameMap, N extends Node>(
+      child: HTMLElementBuilder<CK> | N
+    ) {
+      if (child instanceof HTMLElementBuilder) {
+        this.inner.appendChild(child.inner);
+      } else {
+        this.inner.appendChild(child);
+      }
+      return this;
+    }
+    public withText(text: string) {
+      this.inner.appendChild(document.createTextNode(text));
+      return this;
+    }
+    public withChildren<N extends Node>(
+      children: Iterable<N | HTMLElementBuilder<TAG>>
+    ) {
+      for (const child of children) {
+        if (child instanceof HTMLElementBuilder) {
+          this.inner.appendChild(child.inner);
+        } else {
+          this.inner.appendChild(child);
+        }
+      }
+      return this;
+    }
+    public withEventListener<K extends keyof HTMLElementEventMap>(
+      type: K,
+      listener: (
+        this: HTMLElementTagNameMap[TAG],
+        ev: HTMLElementEventMap[K]
+      ) => any,
+      options?: boolean | AddEventListenerOptions
+    ) {
+      this.inner.addEventListener(type, listener, options);
+      return this;
+    }
+    public withClass(token: string) {
+      this.inner.classList.add(token);
+      return this;
+    }
+    public withId(id: string) {
+      this.inner.id = id;
+      return this;
+    }
+    public withAttribute(name: string, value: string) {
+      this.inner.setAttribute(name, value);
+      return this;
+    }
+    public build() {
+      return this.inner;
+    }
+  }
+}
+
 namespace SOURCE_CONNECTOR {
   namespace SOURCE_MISSIVE {
     export namespace INVITATION_REQUEST_RESPONSE {
@@ -254,67 +320,114 @@ namespace SOURCE_CONNECTOR {
       }
     };
   }
+  import Builder = WebHelper.HTMLElementBuilder;
 
   function SHAPE_VESSEL_HTML_ELEMENT(MONIKER: string) {
-    console.log(MONIKER);
-    let TABLE = document.createElement("table");
-    TABLE.innerHTML =
-      `<tbody><tr class="VESSEL" moniker="${MONIKER}"><td class="STATUS OUT"><div class="IN DEFAULT_0"></div></td><td class="NAME OUT"><div class="CENTERER"><div>${MONIKER}</div></div></td><td class="MISSIVE_INPUT OUT CENTERER" style="display:inline-flex;"><input class="IN H2" type="text" placeholder="SEND MISSIVE..."><div class="BUTTON CENTERER">SEND</div></td><td class="RECORD_INPUT OUT" style="display:inline-flex;"><div class="BUTTON CENTERER">SEND RECORD</div><input type="file"></td></tr></tbody>`.trim();
-    let VESSEL = <HTMLTableRowElement>(
-      (TABLE.firstElementChild as Element).firstElementChild
-    );
-    /*
-    OTHERS.push(
-      new EXTERNAL_VESSEL(
-        MONIKER,
-        VESSEL.querySelector(".STATUS > div") as HTMLDivElement
+    const VESSEL = new Builder("tr")
+      .withClass("VESSEL")
+      .withAttribute("moniker", MONIKER)
+      .withChild(
+        new Builder("td")
+          .withClass("STATUS")
+          .withClass("OUT")
+          .withChild(new Builder("div").withClass("DEFAULT_0").withClass("IN"))
       )
-    );
-    */
-    (
-      VESSEL.querySelector(".MISSIVE_INPUT > .BUTTON") as HTMLDivElement
-    ).addEventListener("click", (ev) => {
-      ev.preventDefault();
-      let MISSIVE = (<HTMLInputElement>(
-        VESSEL.querySelector('.MISSIVE_INPUT > input[type="text"]')
-      )).value.trim();
-      if (MISSIVE !== "") {
-        SEND_VESSEL_MISSIVE({
-          ...THE_SELF,
-          TYPE: "SEND_MEDIA",
-          RECIPIENT: MONIKER,
-          MEDIA: { TYPE: "MISSIVE", TEXT: MISSIVE.toUpperCase() },
-        });
-      }
-    });
-    const input = VESSEL.querySelector<HTMLInputElement>(
-      '.RECORD_INPUT > input[type="file"]'
-    ) as HTMLInputElement;
-    input.addEventListener("change", async () => {
-      SEND_VESSEL_MISSIVE({
-        TYPE: "SEND_MEDIA",
-        MONIKER: THE_SELF.MONIKER,
-        PASSWORD: THE_SELF.PASSWORD,
-        RECIPIENT: MONIKER,
-        MEDIA: {
-          TYPE: "RECORD",
-          FILE_NAME: ((input.files as FileList).item(0) as File).name as string,
-          DATA: new Uint8Array(
-            (await (
-              (input.files as FileList).item(0) as File
-            ).arrayBuffer()) as ArrayBuffer
-          ),
-        },
-      });
-    });
+      .withChild(
+        new Builder("td")
+          .withClass("NAME")
+          .withClass("OUT")
+          .withChild(
+            new Builder("div")
+              .withClass("CENTERER")
+              .withChild(new Builder("div").withText(MONIKER))
+          )
+      )
+      .withChild(
+        new Builder("td")
+          .withClass("MISSIVE_INPUT")
+          .withClass("OUT")
+          .withClass("CENTERER")
+          .withChild(
+            new Builder("input")
+              .withClass("IN")
+              .withClass("H2")
+              .withAttribute("type", "text")
+              .withAttribute("placeholder", "SEND MISSIVE...")
+          )
+          .withChild(
+            new Builder("div")
+              .withClass("CENTERER")
+              .withClass("BUTTON")
+              .withText("SEND")
+              .withEventListener("click", (ev) => {
+                ev.preventDefault();
+                let message = (
+                  (
+                    (ev.target as HTMLDivElement)
+                      .parentElement as HTMLTableCellElement
+                  ).firstElementChild as HTMLInputElement
+                ).value.trim();
 
-    (
-      VESSEL.querySelector(".RECORD_INPUT > .BUTTON") as Element
-    ).addEventListener("click", (ev) => {
-      ev.preventDefault();
-
-      input.click();
-    });
+                if (message !== "") {
+                  SEND_VESSEL_MISSIVE({
+                    ...THE_SELF,
+                    TYPE: "SEND_MEDIA",
+                    RECIPIENT: MONIKER,
+                    MEDIA: { TYPE: "MISSIVE", TEXT: message.toUpperCase() },
+                  });
+                }
+              })
+          )
+      )
+      .withChild(
+        new Builder("td")
+          .withClass("RECORD_INPUT")
+          .withClass("OUT")
+          .withClass("CENTERER")
+          .withChild(
+            new Builder("input")
+              .withAttribute("type", "file")
+              .withEventListener("change", async (ev) => {
+                SEND_VESSEL_MISSIVE({
+                  TYPE: "SEND_MEDIA",
+                  MONIKER: THE_SELF.MONIKER,
+                  PASSWORD: THE_SELF.PASSWORD,
+                  RECIPIENT: MONIKER,
+                  MEDIA: {
+                    TYPE: "RECORD",
+                    FILE_NAME: (
+                      ((ev.target as HTMLInputElement).files as FileList).item(
+                        0
+                      ) as File
+                    ).name as string,
+                    DATA: new Uint8Array(
+                      (await (
+                        (
+                          (ev.target as HTMLInputElement).files as FileList
+                        ).item(0) as File
+                      ).arrayBuffer()) as ArrayBuffer
+                    ),
+                  },
+                });
+              })
+          )
+          .withChild(
+            new Builder("div")
+              .withClass("CENTERER")
+              .withClass("BUTTON")
+              .withText("SEND RECORD")
+              .withEventListener("click", (ev) => {
+                ev.preventDefault();
+                (
+                  (
+                    (ev.target as HTMLDivElement)
+                      .parentElement as HTMLTableCellElement
+                  ).firstElementChild as HTMLInputElement
+                ).click();
+              })
+          )
+      )
+      .build();
 
     return VESSEL;
   }

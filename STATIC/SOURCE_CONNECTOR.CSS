@@ -130,6 +130,9 @@ input[type="text"] {
   text-transform: uppercase;
   background: rgb(241, 241, 241);
 }
+.MISSIVE_INPUT, .RECORD_INPUT {
+  display: inline-flex;
+}
 
 .CENTERER {
   display: flex;
